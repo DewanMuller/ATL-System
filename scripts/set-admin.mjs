@@ -9,7 +9,10 @@ if (!email || !["on", "off"].includes(action)) {
   process.exit(1);
 }
 
-const adapter = new PrismaLibSql({ url: process.env.DATABASE_URL });
+const adapter = new PrismaLibSql({
+  url: process.env.DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
 const prisma = new PrismaClient({ adapter });
 
 const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
