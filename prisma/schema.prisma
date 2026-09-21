@@ -1,0 +1,450 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  password      String
+  name          String?
+  isSuperAdmin  Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  business      Business?
+  membership    Membership?
+  ledObjectives          Objective[]            @relation("ObjectiveLead")
+  objectiveContributions ObjectiveContributor[]
+  responsibleKeyResults  KeyResult[]
+  responsibleInitiatives Initiative[]
+  raciAssignments        RaciAssignment[]
+  assignedNextSteps    NextStep[]
+  assignedWinningMoves WinningMove[]
+  impersonationLogs    ImpersonationLog[] @relation("ImpersonationLogsAsAdmin")
+}
+
+enum MembershipRole {
+  OWNER
+  MEMBER
+}
+
+model Membership {
+  id         String         @id @default(cuid())
+  userId     String         @unique
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  role       MembershipRole @default(MEMBER)
+  createdAt  DateTime       @default(now())
+}
+
+model Business {
+  id             String          @id @default(cuid())
+  name           String
+  joinCode       String          @unique
+  ownerId        String          @unique
+  owner          User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members          Membership[]
+  bhag           Bhag?
+  bhagPeriods    BhagPeriod[]
+  bhagMetrics    BhagMetric[]
+  departments    Department[]
+  objectives     Objective[]
+  nextSteps      NextStep[]
+  winningMoves   WinningMove[]
+  entitlements   Entitlement[]
+  weeklyCheckIns   WeeklyCheckIn[]
+  monthlyReviews   MonthlyReview[]
+  quarterlyReviews QuarterlyReview[]
+  issues           Issue[]
+  impersonationLogs ImpersonationLog[]
+  createdAt        DateTime          @default(now())
+}
+
+// A record of a platform admin logging in as a business's owner for
+// support purposes. Kept even after the session ends (endedAt set) as an
+// audit trail clients can be shown if they ask who accessed their account.
+model ImpersonationLog {
+  id         String    @id @default(cuid())
+  adminId    String
+  admin      User      @relation("ImpersonationLogsAsAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+}
+
+// The BHAG's qualitative "vision statement" — the numbers themselves live on
+// BhagMetric/BhagPeriod/BhagMetricTarget below, one business-wide scorecard
+// with a metric per row and a time-horizon per column (see the "Avolands
+// BHAG" reference table this was modeled on).
+model Bhag {
+  id          String   @id @default(cuid())
+  businessId  String   @unique
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+// A column in the BHAG scorecard — a time horizon like "18 months",
+// "5 Year - 2031" or "15-20 Year BHAG". Free text and business-defined (not
+// a fixed enum) because real BHAG horizons don't fit a standard set of
+// periods; `order` controls left-to-right column position.
+model BhagPeriod {
+  id         String             @id @default(cuid())
+  businessId String
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  label      String
+  order      Int                @default(0)
+  createdAt  DateTime           @default(now())
+  targets    BhagMetricTarget[]
+
+  @@unique([businessId, label])
+}
+
+// A row in the BHAG scorecard (e.g. "SRT (EBITDA%)", or "Board" grouped
+// under the "PEOPLE" category). `currentValue` is the latest known actual —
+// its history over time is BhagMetricSnapshot, mirroring how an Objective's
+// KeyResult tracks outcomePercent vs. how Initiatives track progress.
+model BhagMetric {
+  id           String               @id @default(cuid())
+  businessId   String
+  business     Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category     String?
+  name         String
+  unit         String?
+  order        Int                  @default(0)
+  currentValue Float?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  targets      BhagMetricTarget[]
+  snapshots    BhagMetricSnapshot[]
+}
+
+// The target for one metric at one time horizon (one cell in the
+// scorecard). `note` covers cells that are more descriptive than numeric,
+// e.g. "add 1 new = 3 in total" — `value` still holds the resulting number
+// (3) so progress math keeps working even when a note is shown instead.
+model BhagMetricTarget {
+  id        String     @id @default(cuid())
+  metricId  String
+  metric    BhagMetric @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  periodId  String
+  period    BhagPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  value     Float?
+  note      String?
+  updatedAt DateTime   @updatedAt
+
+  @@unique([metricId, periodId])
+}
+
+// A logged actual value for a metric at a point in time — lets the BHAG
+// page and dashboard chart real progress, the same way the old single-BHAG
+// trend chart did, just per metric now instead of business-wide.
+model BhagMetricSnapshot {
+  id         String     @id @default(cuid())
+  metricId   String
+  metric     BhagMetric @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  value      Float?
+  recordedAt DateTime   @default(now())
+}
+
+// A BGC-sellable product (e.g. "atl"). One row per product, regardless of
+// how many internal modules it bundles.
+model Product {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  name         String
+  description  String?
+  entitlements Entitlement[]
+  createdAt    DateTime      @default(now())
+}
+
+// Grants a Business access to a Product. Today every module inside a
+// product resolves to this single row (see lib/entitlements.ts) — the
+// businessId+productId shape is what lets a product split into
+// separately-sold pieces later without changing this table.
+model Entitlement {
+  id             String    @id @default(cuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  active         Boolean   @default(true)
+  activatedAt    DateTime  @default(now())
+  deactivatedAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([businessId, productId])
+}
+
+model WinningMove {
+  id          String     @id @default(cuid())
+  businessId  String
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  objectiveId String?
+  objective   Objective? @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  assigneeId  String?
+  assignee    User?      @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  dueDate     DateTime?
+  status      RagStatus  @default(AMBER)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+enum PeriodType {
+  YEAR
+  QUARTER
+}
+
+// The Art of Scale OKR model. Part A (planning: title, lead, contributors,
+// weighting, alignment, key results, initiatives) and Part B (performance:
+// outcomePercent + comments on key results/initiatives) operate on the same
+// rows — there is no separate "plan" vs "actuals" record, just fields that
+// stay null until Part B is filled in. Scores are always derived (see
+// lib/okr.ts), never stored, so they can't go stale.
+// A business-defined department (e.g. "F" / "Finance") used to group
+// objectives on the OKRs page. Free-text and scoped per business — like
+// BhagPeriod, this deliberately isn't a fixed enum, since a real company's
+// department structure isn't the same as anyone else's.
+model Department {
+  id         String      @id @default(cuid())
+  businessId String
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  code       String
+  name       String
+  order      Int         @default(0)
+  createdAt  DateTime    @default(now())
+  objectives Objective[]
+
+  @@unique([businessId, code])
+}
+
+model Objective {
+  id                  String       @id @default(cuid())
+  businessId          String
+  business            Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  code                String?
+  title               String
+  departmentId        String?
+  // No SQL-level FK/cascade here (see migration notes) — app/actions
+  // /departments.ts nulls this out on every affected Objective before a
+  // Department is deleted, doing by hand what onDelete: SetNull implies.
+  department          Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  // Soft picks, not a hard-capped rank — same "warn, don't block" approach
+  // as OKR weighting: canEditOutcome-style validation isn't needed since
+  // Part A owner-only rules already gate who can flag these.
+  isTopCompanyOkr     Boolean      @default(false)
+  isTopDepartmentOkr  Boolean      @default(false)
+  alignedToObjectiveId String?
+  alignedToObjective  Objective?   @relation("ObjectiveAlignment", fields: [alignedToObjectiveId], references: [id], onDelete: SetNull)
+  alignedObjectives   Objective[]  @relation("ObjectiveAlignment")
+  leadUserId          String
+  lead                User         @relation("ObjectiveLead", fields: [leadUserId], references: [id], onDelete: Cascade)
+  contributors        ObjectiveContributor[]
+  weighting           Float        @default(0)
+  periodType          PeriodType
+  periodValue         String
+  // The objective's actual completion deadline, distinct from periodType/
+  // periodValue (which just says which OKR cycle it belongs to, e.g.
+  // "Q1 2026"). Nullable only so the migration adding it stays a safe
+  // additive column on a live database — every objective is required to
+  // have one going forward (enforced in app/actions/okr.ts), and existing
+  // rows are backfilled to their period's end date.
+  dueDate             DateTime?
+  comments            String?
+  keyResults          KeyResult[]
+  nextSteps           NextStep[]
+  winningMoves        WinningMove[]
+  raciAssignments     RaciAssignment[]
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@unique([businessId, code])
+}
+
+// Who is Responsible, Accountable, Consulted or Informed on an Objective —
+// deliberately independent of Lead/Contributor/Responsible (Part A/B roles
+// answer "who owns the outcome"; RACI answers "who does what work", which
+// can involve people who aren't formally the Lead or a Contributor, e.g. a
+// Consulted subject-matter expert). One role per person per objective: RACI
+// is a role assignment, not a set — see lib/raci.ts for the "only one
+// Accountable" convention this enables checking.
+enum RaciRole {
+  RESPONSIBLE
+  ACCOUNTABLE
+  CONSULTED
+  INFORMED
+}
+
+model RaciAssignment {
+  id          String    @id @default(cuid())
+  objectiveId String
+  objective   Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        RaciRole
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([objectiveId, userId])
+}
+
+model ObjectiveContributor {
+  id          String    @id @default(cuid())
+  objectiveId String
+  objective   Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([objectiveId, userId])
+}
+
+model KeyResult {
+  id                String       @id @default(cuid())
+  objectiveId       String
+  objective         Objective    @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  metric            String
+  target            String
+  responsibleUserId String
+  responsibleUser   User         @relation(fields: [responsibleUserId], references: [id], onDelete: Cascade)
+  outcomePercent    Float?
+  comments          String?
+  initiatives       Initiative[]
+  nextSteps         NextStep[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Initiative {
+  id                String    @id @default(cuid())
+  keyResultId       String
+  keyResult         KeyResult @relation(fields: [keyResultId], references: [id], onDelete: Cascade)
+  name              String
+  dueDate           DateTime
+  responsibleUserId String
+  responsibleUser   User      @relation(fields: [responsibleUserId], references: [id], onDelete: Cascade)
+  outcomePercent    Float?
+  comments          String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+enum RagStatus {
+  RED
+  AMBER
+  GREEN
+}
+
+model NextStep {
+  id                String           @id @default(cuid())
+  businessId        String
+  business          Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  objectiveId       String?
+  objective         Objective?       @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  keyResultId       String?
+  keyResult         KeyResult?       @relation(fields: [keyResultId], references: [id], onDelete: SetNull)
+  weeklyCheckInId   String?
+  weeklyCheckIn     WeeklyCheckIn?   @relation(fields: [weeklyCheckInId], references: [id], onDelete: SetNull)
+  monthlyReviewId   String?
+  monthlyReview     MonthlyReview?   @relation(fields: [monthlyReviewId], references: [id], onDelete: SetNull)
+  quarterlyReviewId String?
+  quarterlyReview   QuarterlyReview? @relation(fields: [quarterlyReviewId], references: [id], onDelete: SetNull)
+  otherContext      String?
+  title       String
+  assigneeId  String?
+  assignee    User?      @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  owner       String?
+  dueDate     DateTime?
+  status      RagStatus  @default(AMBER)
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  issue Issue?
+}
+
+model WeeklyCheckIn {
+  id                String   @id @default(cuid())
+  businessId        String
+  business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  weekOf            DateTime
+  personName        String
+  wellbeingScore    Int
+  goalCompletionPct Float
+  highlights        String?
+  blockers          String?
+  priorities        String?
+  createdAt         DateTime @default(now())
+
+  nextSteps NextStep[]
+}
+
+model MonthlyReview {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  month         String
+  okrAveragePct Float?
+  highlights    String?
+  blockers      String?
+  priorities    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  nextSteps NextStep[]
+
+  @@unique([businessId, month])
+}
+
+model QuarterlyReview {
+  id               String   @id @default(cuid())
+  businessId       String
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  quarter          String
+  okrAveragePct    Float?
+  businessSummary  String?
+  adjustments      String?
+  nextQuarterFocus String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  nextSteps NextStep[]
+
+  @@unique([businessId, quarter])
+}
+
+enum IssueLevel {
+  COMPANY
+  DIVISIONAL
+  ROLE
+}
+
+model Issue {
+  id                  String     @id @default(cuid())
+  businessId          String
+  business            Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title               String
+  level               IssueLevel @default(ROLE)
+  accountableOwner    String
+  rootCause           String?
+  actionPlan          String?
+  dibred              Boolean    @default(false)
+  dibredAt            DateTime?
+  ceoApproved         Boolean    @default(false)
+  convertedNextStepId String?    @unique
+  convertedNextStep   NextStep?  @relation(fields: [convertedNextStepId], references: [id], onDelete: SetNull)
+  escalatedToQuarter  String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+}

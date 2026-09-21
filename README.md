@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Above The Line
 
-## Getting Started
+A BHAG/OKR/RAG strategic-execution app for Business Game Changers (BGC), built with Next.js (App Router), Prisma, and libSQL/Turso.
 
-First, run the development server:
+## Local development
 
 ```bash
+npm install
+cp .env.example .env   # fill in DATABASE_URL and AUTH_SECRET
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Local dev uses a local SQLite file (`DATABASE_URL="file:./dev.db"`) — no Turso account needed.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See `.env.example` for the full list. In production, `DATABASE_URL` points at a Turso database and `TURSO_AUTH_TOKEN` must also be set. Generate a separate `AUTH_SECRET` per environment (`openssl rand -base64 32`) — never reuse the local dev secret in production.
 
-## Learn More
+## Database migrations
 
-To learn more about Next.js, take a look at the following resources:
+Standard Prisma workflow locally:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx prisma migrate dev --name <change>
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Prisma's CLI (`migrate deploy`/`db push`) does not support remote `libsql://` URLs — only the Prisma Client at runtime does, via the libSQL driver adapter (see `lib/prisma.ts`). After creating a new migration, apply it to the production database with:
 
-## Deploy on Vercel
+```bash
+TURSO_URL="libsql://<db>.turso.io" TURSO_TOKEN="<token>" npm run db:push-turso
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This script (`scripts/push-migrations-to-turso.mjs`) applies any not-yet-applied migrations and keeps its own `_prisma_migrations` bookkeeping table on the remote database in sync.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deploying
+
+The app is deployed on Vercel, connected to this repository. Production environment variables (`DATABASE_URL`, `TURSO_AUTH_TOKEN`, `AUTH_SECRET`) are set in the Vercel project settings, not committed anywhere.
