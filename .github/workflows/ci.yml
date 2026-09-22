@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # A throwaway local database is enough — this job only needs the
+      # build/lint to succeed, it never talks to a real database.
+      DATABASE_URL: "file:./ci.db"
+      AUTH_SECRET: "ci-placeholder-secret-not-used-anywhere-real"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run build

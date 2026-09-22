@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionMembership } from "@/lib/business";
 import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
@@ -58,9 +59,9 @@ export default async function PreviewPillarMrapPage() {
       {rollups.length === 0 ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           No departments set up yet — add some on the{" "}
-          <a href="/okrs" className="underline">
+          <Link href="/okrs" className="underline">
             OKRs
-          </a>{" "}
+          </Link>{" "}
           page.
         </p>
       ) : (

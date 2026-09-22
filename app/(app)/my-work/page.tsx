@@ -8,7 +8,7 @@ import { AllInitiativesTable, type FlatInitiative } from "@/components/preview/A
 import { StatCard } from "@/components/preview/StatCard";
 import { RagBar } from "@/components/preview/RagBar";
 import { Avatar } from "@/components/preview/Avatar";
-import { ragForPercent, ragHex, ragBadgeClasses, type Rag } from "@/components/preview/colors";
+import { ragForPercent, ragBadgeClasses, type Rag } from "@/components/preview/colors";
 
 function initialsFor(user: { name: string | null; email: string }) {
   if (user.name) {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionMembership } from "@/lib/business";
 import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
@@ -69,9 +70,9 @@ export default async function TimelinePage() {
         </div>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           No objectives with a recognizable period yet. Set a Period on the{" "}
-          <a href="/okrs" className="underline">
+          <Link href="/okrs" className="underline">
             OKRs
-          </a>{" "}
+          </Link>{" "}
           page to see them here.
         </p>
       </div>

@@ -52,12 +52,12 @@ export function DonutChart({
     return <p className="text-sm text-zinc-500 dark:text-zinc-400">No data yet.</p>;
   }
 
-  let cursor = 0;
   const wedges = segments.map((s, i) => {
+    const priorValue = segments.slice(0, i).reduce((sum, seg) => sum + seg.value, 0);
+    const cursor = (priorValue / total) * 360;
     const sweep = (s.value / total) * 360;
     const start = cursor + (sweep > 0 ? GAP_DEG / 2 : 0);
     const end = cursor + sweep - (sweep > 0 ? GAP_DEG / 2 : 0);
-    cursor += sweep;
     return { ...s, index: i, path: wedgePath(Math.min(start, end), Math.max(start, end)) };
   });
 
