@@ -4,6 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getSessionMembership } from "@/lib/business";
+import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { InactiveNotice } from "@/components/InactiveNotice";
 import { canViewObjective, canEditOutcome, objectiveScore } from "@/lib/okr";
 import { RealInitiativeTable, type RealKeyResultGroup } from "@/components/preview/RealInitiativeTable";
 import { Avatar } from "@/components/preview/Avatar";
@@ -62,6 +64,11 @@ export default async function OkrDetailPage({
 
   if (!membership || !objective) notFound();
   if (membership.role !== "OWNER" && !canViewObjective(membership, objective)) notFound();
+
+  const entitlement = await getAtlEntitlement(membership.businessId);
+  if (!isModuleEntitled(entitlement, "okrs")) {
+    return <InactiveNotice />;
+  }
 
   const [business] = isOwner
     ? await Promise.all([

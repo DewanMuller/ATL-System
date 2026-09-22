@@ -3,6 +3,8 @@ import { Target, CheckCircle2, FileText, Trophy, ListTodo } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getSessionMembership } from "@/lib/business";
+import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { InactiveNotice } from "@/components/InactiveNotice";
 import { objectiveScore } from "@/lib/okr";
 import { AllInitiativesTable, type FlatInitiative } from "@/components/preview/AllInitiativesTable";
 import { StatCard } from "@/components/preview/StatCard";
@@ -69,6 +71,11 @@ export default async function MyWorkPage() {
         No business found for this account.
       </div>
     );
+  }
+
+  const entitlement = await getAtlEntitlement(business.id);
+  if (!isModuleEntitled(entitlement, "okrs")) {
+    return <InactiveNotice />;
   }
 
   const ledObjectives = business.objectives.filter((o) => o.leadUserId === membership.userId);
