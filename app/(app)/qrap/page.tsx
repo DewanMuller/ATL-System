@@ -2,7 +2,7 @@ import Link from "next/link";
 import { TrendingUp, Smile, Target } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionBusinessId } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { StatCard } from "@/components/preview/StatCard";
 import { currentOkrAverage } from "@/lib/okr";
@@ -68,8 +68,7 @@ export default async function QrapPage({
     );
   }
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "qrap")) {
+  if (!(await isBusinessEntitled(business.id, "qrap"))) {
     return <InactiveNotice />;
   }
 

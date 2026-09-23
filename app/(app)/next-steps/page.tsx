@@ -1,7 +1,7 @@
 import { ListTodo, TrendingUp, AlertTriangle, XCircle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionMembership } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import {
   createNextStep,
@@ -133,8 +133,7 @@ export default async function NextStepsPage() {
     );
   }
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "nextSteps")) {
+  if (!(await isBusinessEntitled(business.id, "nextSteps"))) {
     return <InactiveNotice />;
   }
 

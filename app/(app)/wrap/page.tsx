@@ -1,7 +1,7 @@
 import { Users, Smile, Target } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionBusinessId } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { createWeeklyCheckIn, deleteWeeklyCheckIn } from "@/app/actions/wrap";
 import { StatCard } from "@/components/preview/StatCard";
@@ -59,8 +59,7 @@ export default async function WrapPage() {
     );
   }
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "wrap")) {
+  if (!(await isBusinessEntitled(business.id, "wrap"))) {
     return <InactiveNotice />;
   }
 

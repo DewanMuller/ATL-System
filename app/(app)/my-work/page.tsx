@@ -3,7 +3,7 @@ import { Target, CheckCircle2, FileText, Trophy, ListTodo } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getSessionMembership } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { objectiveScore } from "@/lib/okr";
 import { AllInitiativesTable, type FlatInitiative } from "@/components/preview/AllInitiativesTable";
@@ -73,8 +73,7 @@ export default async function MyWorkPage() {
     );
   }
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "okrs")) {
+  if (!(await isBusinessEntitled(business.id, "okrs"))) {
     return <InactiveNotice />;
   }
 

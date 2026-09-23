@@ -17,7 +17,8 @@ export async function createWeeklyCheckIn(formData: FormData) {
   if (Number.isNaN(weekOf.getTime())) return;
   if (!Number.isFinite(wellbeingScore) || wellbeingScore < 1 || wellbeingScore > 5)
     return;
-  if (!Number.isFinite(goalCompletionPct)) return;
+  if (!Number.isFinite(goalCompletionPct) || goalCompletionPct < 0 || goalCompletionPct > 100)
+    return;
 
   await prisma.weeklyCheckIn.create({
     data: {

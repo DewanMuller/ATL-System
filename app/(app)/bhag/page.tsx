@@ -1,7 +1,7 @@
 import { Target, CalendarRange, TrendingUp } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionMembership } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { targetCellLabel, metricProgress } from "@/lib/bhag";
 import {
@@ -65,8 +65,7 @@ export default async function BhagPage() {
     );
   }
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "bhag")) {
+  if (!(await isBusinessEntitled(business.id, "bhag"))) {
     return <InactiveNotice />;
   }
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { TrendingUp, Smile, Target } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionBusinessId } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { currentOkrAverage } from "@/lib/okr";
 import { saveMonthlyReview, deleteMonthlyReview } from "@/app/actions/mrap";
@@ -28,8 +28,7 @@ export default async function MrapPage({
     );
   }
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "mrap")) {
+  if (!(await isBusinessEntitled(business.id, "mrap"))) {
     return <InactiveNotice />;
   }
 

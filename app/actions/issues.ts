@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireBusiness } from "@/lib/business";
+import { requireBusiness, requireMembership } from "@/lib/business";
 import { currentQuarterString, shiftQuarter } from "@/lib/quarter";
 import { parseOptionalDate } from "@/lib/forms";
 
@@ -55,14 +55,15 @@ export async function saveDibrAnalysis(formData: FormData) {
 }
 
 export async function setCeoApproval(formData: FormData) {
-  const business = await requireBusiness();
+  const membership = await requireMembership();
+  if (membership.role !== "OWNER") return;
 
   const issueId = String(formData.get("issueId") ?? "");
   const approved = String(formData.get("approved") ?? "") === "true";
   if (!issueId) return;
 
   await prisma.issue.updateMany({
-    where: { id: issueId, businessId: business.id },
+    where: { id: issueId, businessId: membership.businessId },
     data: { ceoApproved: approved },
   });
 
@@ -76,26 +77,33 @@ export async function convertIssueToNextStep(formData: FormData) {
   const objectiveId = String(formData.get("objectiveId") ?? "");
   if (!issueId || !objectiveId) return;
 
-  const [issue, objective] = await Promise.all([
-    prisma.issue.findFirst({ where: { id: issueId, businessId: business.id } }),
-    prisma.objective.findFirst({ where: { id: objectiveId, businessId: business.id } }),
-  ]);
-  if (!issue || !objective || issue.convertedNextStepId) return;
+  const dueDate = parseOptionalDate(formData.get("dueDate"));
 
-  const nextStep = await prisma.nextStep.create({
-    data: {
-      businessId: business.id,
-      objectiveId,
-      title: issue.actionPlan || issue.title,
-      owner: issue.accountableOwner,
-      dueDate: parseOptionalDate(formData.get("dueDate")),
-      notes: `Converted from DIBR issue: ${issue.title}`,
-    },
-  });
+  // Transacted so the convertedNextStepId check and the write can't race —
+  // two near-simultaneous submits would otherwise both pass the check
+  // before either write lands, creating duplicate NextStep rows.
+  await prisma.$transaction(async (tx) => {
+    const [issue, objective] = await Promise.all([
+      tx.issue.findFirst({ where: { id: issueId, businessId: business.id } }),
+      tx.objective.findFirst({ where: { id: objectiveId, businessId: business.id } }),
+    ]);
+    if (!issue || !objective || issue.convertedNextStepId) return;
 
-  await prisma.issue.update({
-    where: { id: issueId },
-    data: { convertedNextStepId: nextStep.id },
+    const nextStep = await tx.nextStep.create({
+      data: {
+        businessId: business.id,
+        objectiveId,
+        title: issue.actionPlan || issue.title,
+        owner: issue.accountableOwner,
+        dueDate,
+        notes: `Converted from DIBR issue: ${issue.title}`,
+      },
+    });
+
+    await tx.issue.update({
+      where: { id: issueId },
+      data: { convertedNextStepId: nextStep.id },
+    });
   });
 
   revalidatePath("/issues");
@@ -108,35 +116,40 @@ export async function escalateIssueToQrap(formData: FormData) {
   const issueId = String(formData.get("issueId") ?? "");
   if (!issueId) return;
 
-  const issue = await prisma.issue.findFirst({
-    where: { id: issueId, businessId: business.id },
-  });
-  if (!issue || issue.escalatedToQuarter || issue.convertedNextStepId) return;
+  // Transacted for the same reason as convertIssueToNextStep — otherwise
+  // concurrent submits can each pass the escalatedToQuarter check and
+  // double-append the note into quarterlyReview.adjustments.
+  await prisma.$transaction(async (tx) => {
+    const issue = await tx.issue.findFirst({
+      where: { id: issueId, businessId: business.id },
+    });
+    if (!issue || issue.escalatedToQuarter || issue.convertedNextStepId) return;
 
-  const nextQuarter = shiftQuarter(currentQuarterString(), 1);
-  const note = `[${issue.level}] ${issue.title} — root cause: ${
-    issue.rootCause || "n/a"
-  }. Owner: ${issue.accountableOwner}.`;
+    const nextQuarter = shiftQuarter(currentQuarterString(), 1);
+    const note = `[${issue.level}] ${issue.title} — root cause: ${
+      issue.rootCause || "n/a"
+    }. Owner: ${issue.accountableOwner}.`;
 
-  const existing = await prisma.quarterlyReview.findUnique({
-    where: { businessId_quarter: { businessId: business.id, quarter: nextQuarter } },
-  });
+    const existing = await tx.quarterlyReview.findUnique({
+      where: { businessId_quarter: { businessId: business.id, quarter: nextQuarter } },
+    });
 
-  await prisma.quarterlyReview.upsert({
-    where: { businessId_quarter: { businessId: business.id, quarter: nextQuarter } },
-    create: {
-      businessId: business.id,
-      quarter: nextQuarter,
-      adjustments: note,
-    },
-    update: {
-      adjustments: existing?.adjustments ? `${existing.adjustments}\n${note}` : note,
-    },
-  });
+    await tx.quarterlyReview.upsert({
+      where: { businessId_quarter: { businessId: business.id, quarter: nextQuarter } },
+      create: {
+        businessId: business.id,
+        quarter: nextQuarter,
+        adjustments: note,
+      },
+      update: {
+        adjustments: existing?.adjustments ? `${existing.adjustments}\n${note}` : note,
+      },
+    });
 
-  await prisma.issue.update({
-    where: { id: issueId },
-    data: { escalatedToQuarter: nextQuarter },
+    await tx.issue.update({
+      where: { id: issueId },
+      data: { escalatedToQuarter: nextQuarter },
+    });
   });
 
   revalidatePath("/issues");

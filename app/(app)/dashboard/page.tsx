@@ -1,7 +1,7 @@
 import { Users, TrendingUp, AlertTriangle, Clock, CheckCircle2, FileText, ListChecks, Target, Trophy } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionMembership } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { regenerateJoinCode } from "@/app/actions/business";
 import { canViewObjective, objectiveScore } from "@/lib/okr";
@@ -110,8 +110,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "okrs")) {
+  if (!(await isBusinessEntitled(business.id, "okrs"))) {
     return <InactiveNotice />;
   }
 
@@ -565,14 +564,16 @@ export default async function DashboardPage() {
               </code>{" "}
               at sign up.
             </p>
-            <form action={regenerateJoinCode}>
-              <button
-                type="submit"
-                className="whitespace-nowrap rounded-md border border-black/10 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-zinc-900"
-              >
-                Regenerate code
-              </button>
-            </form>
+            {isOwner && (
+              <form action={regenerateJoinCode}>
+                <button
+                  type="submit"
+                  className="whitespace-nowrap rounded-md border border-black/10 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                >
+                  Regenerate code
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>

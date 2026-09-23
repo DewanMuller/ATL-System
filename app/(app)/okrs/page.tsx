@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getSessionMembership } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import {
   canViewObjective,
@@ -83,8 +83,7 @@ export default async function OkrsPage({
     );
   }
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "okrs")) {
+  if (!(await isBusinessEntitled(business.id, "okrs"))) {
     return <InactiveNotice />;
   }
 

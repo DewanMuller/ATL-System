@@ -1,9 +1,11 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { signIn, signOut } from "@/lib/auth";
 import { generateJoinCode, normalizeJoinCode } from "@/lib/joinCode";
+import { IMPERSONATION_COOKIE } from "@/lib/impersonation";
 
 class InvalidJoinCodeError extends Error {}
 
@@ -78,5 +80,10 @@ export async function signup(formData: FormData) {
 }
 
 export async function logout() {
+  // Clear any live impersonation session so it can't carry over to whoever
+  // logs in next on this browser (see lib/impersonation.ts).
+  const cookieStore = await cookies();
+  cookieStore.delete(IMPERSONATION_COOKIE);
+
   await signOut({ redirectTo: "/login" });
 }

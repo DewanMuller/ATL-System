@@ -1,7 +1,7 @@
 import { AlertTriangle, CheckCircle2, Clock, Percent } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { getSessionBusinessId } from "@/lib/business";
-import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
+import { getSessionMembership } from "@/lib/business";
+import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { StatCard } from "@/components/preview/StatCard";
 import { RagBar } from "@/components/preview/RagBar";
@@ -22,32 +22,29 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 export default async function IssuesPage() {
-  const businessId = await getSessionBusinessId();
-  const business = businessId
-    ? await prisma.business.findUnique({ where: { id: businessId } })
-    : null;
+  const membership = await getSessionMembership();
 
-  if (!business) {
+  if (!membership) {
     return (
       <div className="p-8 text-sm text-zinc-500">
         No business found for this account.
       </div>
     );
   }
+  const isOwner = membership.role === "OWNER";
 
-  const entitlement = await getAtlEntitlement(business.id);
-  if (!isModuleEntitled(entitlement, "issues")) {
+  if (!(await isBusinessEntitled(membership.businessId, "issues"))) {
     return <InactiveNotice />;
   }
 
   const [issues, objectives] = await Promise.all([
     prisma.issue.findMany({
-      where: { businessId: business.id },
+      where: { businessId: membership.businessId },
       include: { convertedNextStep: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.objective.findMany({
-      where: { businessId: business.id },
+      where: { businessId: membership.businessId },
       orderBy: { createdAt: "asc" },
     }),
   ]);
@@ -228,26 +225,38 @@ export default async function IssuesPage() {
             </dl>
 
             {issue.level === "COMPANY" && (
-              <form action={setCeoApproval} className="mt-3">
-                <input type="hidden" name="issueId" value={issue.id} />
-                <input
-                  type="hidden"
-                  name="approved"
-                  value={(!issue.ceoApproved).toString()}
-                />
-                <button
-                  type="submit"
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              isOwner ? (
+                <form action={setCeoApproval} className="mt-3">
+                  <input type="hidden" name="issueId" value={issue.id} />
+                  <input
+                    type="hidden"
+                    name="approved"
+                    value={(!issue.ceoApproved).toString()}
+                  />
+                  <button
+                    type="submit"
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      issue.ceoApproved
+                        ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                    }`}
+                  >
+                    {issue.ceoApproved
+                      ? "✓ DIBR approved by CEO"
+                      : "Mark DIBR approved by CEO"}
+                  </button>
+                </form>
+              ) : (
+                <span
+                  className={`mt-3 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
                     issue.ceoApproved
                       ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
                       : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
                   }`}
                 >
-                  {issue.ceoApproved
-                    ? "✓ DIBR approved by CEO"
-                    : "Mark DIBR approved by CEO"}
-                </button>
-              </form>
+                  {issue.ceoApproved ? "✓ DIBR approved by CEO" : "Awaiting CEO approval"}
+                </span>
+              )
             )}
 
             <div className="mt-3 border-t border-black/10 pt-3 dark:border-white/10">

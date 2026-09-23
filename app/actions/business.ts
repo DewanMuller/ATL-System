@@ -10,10 +10,11 @@ import { resolveAssigneeId } from "@/lib/assignees";
 // ---------- Team ----------
 
 export async function regenerateJoinCode() {
-  const business = await requireBusiness();
+  const membership = await requireMembership();
+  if (membership.role !== "OWNER") return;
 
   await prisma.business.update({
-    where: { id: business.id },
+    where: { id: membership.businessId },
     data: { joinCode: generateJoinCode() },
   });
 

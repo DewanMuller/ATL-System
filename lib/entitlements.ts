@@ -35,3 +35,15 @@ export function isModuleEntitled(
 ): boolean {
   return entitlement?.active ?? false;
 }
+
+// Combines getAtlEntitlement + isModuleEntitled into the single call every
+// page needs — one place to change if entitlement resolution ever gets more
+// complex (e.g. per-module billing), and one less place for a page to get
+// subtly wrong by calling the two functions separately.
+export async function isBusinessEntitled(
+  businessId: string,
+  moduleKey: AtlModuleKey
+): Promise<boolean> {
+  const entitlement = await getAtlEntitlement(businessId);
+  return isModuleEntitled(entitlement, moduleKey);
+}

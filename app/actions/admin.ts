@@ -56,6 +56,9 @@ export async function setAtlEntitlement(formData: FormData) {
   if (!businessId) return;
   const active = String(formData.get("active") ?? "") === "true";
 
+  const business = await prisma.business.findUnique({ where: { id: businessId } });
+  if (!business) return;
+
   const product = await prisma.product.upsert({
     where: { slug: ATL_PRODUCT_SLUG },
     create: { slug: ATL_PRODUCT_SLUG, name: "Above The Line" },
