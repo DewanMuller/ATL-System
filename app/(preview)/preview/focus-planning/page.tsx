@@ -7,20 +7,9 @@ import { canViewObjective } from "@/lib/okr";
 import { Avatar } from "@/components/preview/Avatar";
 import { statusLabel, ragFor } from "@/components/preview/initiativeStatus";
 import { ragHex } from "@/components/preview/colors";
+import { initialsFor, nameFor } from "@/lib/user";
 
 const DUE_SOON_DAYS = 7;
-
-function initialsFor(user: { name: string | null; email: string }) {
-  if (user.name) {
-    const parts = user.name.trim().split(/\s+/);
-    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  return user.email.slice(0, 2).toUpperCase();
-}
-
-function nameFor(user: { name: string | null; email: string }) {
-  return user.name || user.email;
-}
 
 function formatDate(d: Date) {
   return new Intl.DateTimeFormat("en-ZA", { day: "2-digit", month: "short", year: "numeric" }).format(d);

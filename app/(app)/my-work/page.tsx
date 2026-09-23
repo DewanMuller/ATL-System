@@ -11,18 +11,7 @@ import { StatCard } from "@/components/preview/StatCard";
 import { RagBar } from "@/components/preview/RagBar";
 import { Avatar } from "@/components/preview/Avatar";
 import { ragForPercent, ragBadgeClasses, type Rag } from "@/components/preview/colors";
-
-function initialsFor(user: { name: string | null; email: string }) {
-  if (user.name) {
-    const parts = user.name.trim().split(/\s+/);
-    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  return user.email.slice(0, 2).toUpperCase();
-}
-
-function nameFor(user: { name: string | null; email: string }) {
-  return user.name || user.email;
-}
+import { initialsFor, nameFor } from "@/lib/user";
 
 function formatDate(d: Date | null) {
   if (!d) return null;

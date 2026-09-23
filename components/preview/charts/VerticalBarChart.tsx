@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChartDataTable } from "./ChartDataTable";
 
 const HEIGHT = 200;
 
@@ -93,21 +94,7 @@ export function VerticalBarChart({
         </div>
       </div>
 
-      <details className="mt-1">
-        <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
-          View as table
-        </summary>
-        <table className="mt-2 w-full text-left text-xs">
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.label} className="border-t border-black/5 dark:border-white/5">
-                <td className="py-1 pr-4 text-zinc-700 dark:text-zinc-300">{item.label}</td>
-                <td className="py-1 text-zinc-700 dark:text-zinc-300">{item.value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
+      <ChartDataTable items={items} />
     </div>
   );
 }

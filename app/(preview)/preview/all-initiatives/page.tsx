@@ -5,18 +5,7 @@ import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { canViewObjective, canEditOutcome } from "@/lib/okr";
 import { AllInitiativesTable, type FlatInitiative } from "@/components/preview/AllInitiativesTable";
-
-function initialsFor(user: { name: string | null; email: string }) {
-  if (user.name) {
-    const parts = user.name.trim().split(/\s+/);
-    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  return user.email.slice(0, 2).toUpperCase();
-}
-
-function nameFor(user: { name: string | null; email: string }) {
-  return user.name || user.email;
-}
+import { initialsFor, nameFor } from "@/lib/user";
 
 export default async function AllInitiativesPage() {
   const [membership, session] = await Promise.all([getSessionMembership(), auth()]);

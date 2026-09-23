@@ -16,20 +16,9 @@ import { PeriodSelect } from "@/components/PeriodSelect";
 import { ObjectiveForm } from "@/components/okr/ObjectiveForm";
 import { DepartmentManager } from "@/components/okr/DepartmentManager";
 import { Target, Percent, TrendingUp } from "lucide-react";
+import { initialsFor, nameFor } from "@/lib/user";
 
 const DUE_SOON_DAYS = 7;
-
-function initialsFor(user: { name: string | null; email: string }) {
-  if (user.name) {
-    const parts = user.name.trim().split(/\s+/);
-    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  return user.email.slice(0, 2).toUpperCase();
-}
-
-function nameFor(user: { name: string | null; email: string }) {
-  return user.name || user.email;
-}
 
 function periodKey(o: { periodType: string; periodValue: string }) {
   return `${o.periodType}|${o.periodValue}`;

@@ -9,3 +9,9 @@ export function parseOptionalDate(value: FormDataEntryValue | null) {
   const d = new Date(String(value));
   return Number.isNaN(d.getTime()) ? null : d;
 }
+
+// The inverse of parseOptionalDate: formats a Date as the "YYYY-MM-DD"
+// string an <input type="date"> defaultValue/display expects.
+export function toDateInputValue(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChartDataTable } from "./ChartDataTable";
 
 export function HorizontalBarChart({
   items,
@@ -58,6 +59,8 @@ export function HorizontalBarChart({
         <span>{Math.round(max / 2)}{valueSuffix}</span>
         <span>{max}{valueSuffix}</span>
       </div>
+
+      <ChartDataTable items={items.map((item) => ({ label: item.label, value: `${item.value}${valueSuffix}` }))} />
     </div>
   );
 }

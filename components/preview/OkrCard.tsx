@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { Avatar } from "./Avatar";
-import { ragForPercent, ragHex, ragBadgeClasses, type Rag } from "./colors";
+import { ragForPercent, ragHex, ragBadgeClasses, ragLabel, type Rag } from "./colors";
 
 export type OkrCardKeyResult = {
   id: string;
@@ -24,10 +24,6 @@ export type OkrCardData = {
   keyResults: OkrCardKeyResult[];
 };
 
-function ragLabel(status: Rag) {
-  return status === "GREEN" ? "Green" : status === "AMBER" ? "Amber" : "Red";
-}
-
 export function OkrCard({ okr, basePath = "/preview/okr-workspace" }: { okr: OkrCardData; basePath?: string }) {
   const status: Rag | "NOT_STARTED" = okr.score == null ? "NOT_STARTED" : ragForPercent(okr.score);
 
@@ -42,7 +38,7 @@ export function OkrCard({ okr, basePath = "/preview/okr-workspace" }: { okr: Okr
             <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{okr.code}</span>
           )}
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ragBadgeClasses(status)}`}>
-            {status === "NOT_STARTED" ? "Not Started" : ragLabel(status)}
+            {ragLabel(status)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -107,7 +103,7 @@ export function OkrCard({ okr, basePath = "/preview/okr-workspace" }: { okr: Okr
                   <span
                     className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] font-medium ${ragBadgeClasses(krStatus)}`}
                   >
-                    {krStatus === "NOT_STARTED" ? "Not Started" : ragLabel(krStatus)}
+                    {ragLabel(krStatus)}
                   </span>
                 </div>
               );

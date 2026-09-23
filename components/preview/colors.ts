@@ -52,6 +52,16 @@ export function ragHex(status: Rag) {
   return RAG_HEX[status];
 }
 
+export function ragLabel(status: Rag | "NOT_STARTED"): string {
+  const map = {
+    GREEN: "Green",
+    AMBER: "Amber",
+    RED: "Red",
+    NOT_STARTED: "Not Started",
+  };
+  return map[status];
+}
+
 export function ragBadgeClasses(status: Rag | "NOT_STARTED") {
   const map = {
     GREEN: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",

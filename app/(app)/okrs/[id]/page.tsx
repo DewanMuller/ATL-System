@@ -8,24 +8,14 @@ import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { canViewObjective, canEditOutcome, objectiveScore } from "@/lib/okr";
 import { RealInitiativeTable, type RealKeyResultGroup } from "@/components/preview/RealInitiativeTable";
-import { Avatar } from "@/components/preview/Avatar";
-import { ragForPercent, ragHex, ragBadgeClasses, type Rag } from "@/components/preview/colors";
+import { ragForPercent, ragHex, ragBadgeClasses, ragLabel, type Rag } from "@/components/preview/colors";
 import { deleteObjective, deleteKeyResult, deleteInitiative } from "@/app/actions/okr";
 import { ObjectiveForm } from "@/components/okr/ObjectiveForm";
 import { KeyResultForm } from "@/components/okr/KeyResultForm";
 import { InitiativeForm } from "@/components/okr/InitiativeForm";
-
-function initialsFor(user: { name: string | null; email: string }) {
-  if (user.name) {
-    const parts = user.name.trim().split(/\s+/);
-    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  return user.email.slice(0, 2).toUpperCase();
-}
-
-function nameFor(user: { name: string | null; email: string }) {
-  return user.name || user.email;
-}
+import { ObjectiveOverviewTab } from "@/components/okr/ObjectiveOverviewTab";
+import { initialsFor, nameFor } from "@/lib/user";
+import { toDateInputValue } from "@/lib/forms";
 
 export default async function OkrDetailPage({
   params,
@@ -128,7 +118,7 @@ export default async function OkrDetailPage({
             <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{objective.code}</span>
           )}
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ragBadgeClasses(status)}`}>
-            {status === "NOT_STARTED" ? "Not Started" : status === "GREEN" ? "Green" : status === "AMBER" ? "Amber" : "Red"}
+            {ragLabel(status)}
           </span>
           <span className="text-xl font-bold" style={{ color: status === "NOT_STARTED" ? "#898781" : ragHex(status) }}>
             {score != null ? `${Math.round(score)}%` : "—"}
@@ -181,56 +171,11 @@ export default async function OkrDetailPage({
       )}
 
       {tab === "overview" && (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-950">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                {objective.department?.name ?? "No department"}
-              </span>
-              <Avatar initials={initialsFor(objective.lead)} name={nameFor(objective.lead)} />
-              <span className="text-zinc-400">
-                {keyResultGroups.reduce((sum, kr) => sum + kr.initiatives.length, 0)} initiatives
-              </span>
-            </div>
-          </div>
-          <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-zinc-50 text-xs uppercase text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                <tr>
-                  <th className="px-4 py-2">Key Result</th>
-                  <th className="px-4 py-2">Progress</th>
-                  <th className="px-4 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {keyResultGroups.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-4 text-center text-xs text-zinc-400">
-                      No key results yet.
-                    </td>
-                  </tr>
-                ) : (
-                  keyResultGroups.map((kr) => {
-                    const krStatus: Rag | "NOT_STARTED" = kr.outcomePercent == null ? "NOT_STARTED" : ragForPercent(kr.outcomePercent);
-                    return (
-                      <tr key={kr.id} className="border-t border-black/10 dark:border-white/10">
-                        <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">{kr.metric}</td>
-                        <td className="px-4 py-2 text-zinc-500 dark:text-zinc-400">
-                          {kr.outcomePercent != null ? `${Math.round(kr.outcomePercent)}%` : "—"}
-                        </td>
-                        <td className="px-4 py-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ragBadgeClasses(krStatus)}`}>
-                            {krStatus === "NOT_STARTED" ? "Not Started" : krStatus === "GREEN" ? "Green" : krStatus === "AMBER" ? "Amber" : "Red"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ObjectiveOverviewTab
+          department={objective.department?.name ?? "No department"}
+          lead={objective.lead}
+          keyResultGroups={keyResultGroups}
+        />
       )}
 
       {tab === "planning" && isOwner && business && (
@@ -265,7 +210,7 @@ export default async function OkrDetailPage({
                   weightingPercent: objective.weighting * 100,
                   periodType: objective.periodType,
                   periodValue: objective.periodValue,
-                  dueDate: objective.dueDate ? objective.dueDate.toISOString().slice(0, 10) : "",
+                  dueDate: objective.dueDate ? toDateInputValue(objective.dueDate) : "",
                   alignedToObjectiveId: objective.alignedToObjectiveId,
                   departmentId: objective.departmentId,
                   isTopCompanyOkr: objective.isTopCompanyOkr,
@@ -326,7 +271,7 @@ export default async function OkrDetailPage({
                               {initiative.name}
                             </p>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                              Due {initiative.dueDate.toISOString().slice(0, 10)} · {nameFor(initiative.responsibleUser)}
+                              Due {toDateInputValue(initiative.dueDate)} · {nameFor(initiative.responsibleUser)}
                             </p>
                           </div>
                           <form action={deleteInitiative.bind(null, initiative.id)}>
@@ -345,7 +290,7 @@ export default async function OkrDetailPage({
                               initiativeId={initiative.id}
                               defaultValues={{
                                 name: initiative.name,
-                                dueDate: initiative.dueDate.toISOString().slice(0, 10),
+                                dueDate: toDateInputValue(initiative.dueDate),
                                 responsibleUserId: initiative.responsibleUserId,
                               }}
                               members={business.members}

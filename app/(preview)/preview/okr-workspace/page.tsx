@@ -5,20 +5,9 @@ import { InactiveNotice } from "@/components/InactiveNotice";
 import { canViewObjective, objectiveScore } from "@/lib/okr";
 import { OkrWorkspaceGrid } from "@/components/preview/OkrWorkspaceGrid";
 import type { OkrCardData } from "@/components/preview/OkrCard";
+import { initialsFor, nameFor } from "@/lib/user";
 
 const DUE_SOON_DAYS = 7;
-
-function initialsFor(user: { name: string | null; email: string }) {
-  if (user.name) {
-    const parts = user.name.trim().split(/\s+/);
-    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  return user.email.slice(0, 2).toUpperCase();
-}
-
-function nameFor(user: { name: string | null; email: string }) {
-  return user.name || user.email;
-}
 
 export default async function OkrWorkspacePage() {
   const membership = await getSessionMembership();

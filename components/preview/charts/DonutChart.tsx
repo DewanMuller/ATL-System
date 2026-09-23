@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChartDataTable } from "./ChartDataTable";
 
 export type DonutSegment = { label: string; value: number; color: string };
 
@@ -110,21 +111,7 @@ export function DonutChart({
         ))}
       </div>
 
-      <details className="mt-2 text-center">
-        <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
-          View as table
-        </summary>
-        <table className="mx-auto mt-2 text-left text-xs">
-          <tbody>
-            {segments.map((s) => (
-              <tr key={s.label} className="border-t border-black/5 dark:border-white/5">
-                <td className="py-1 pr-4 text-zinc-700 dark:text-zinc-300">{s.label}</td>
-                <td className="py-1 text-zinc-700 dark:text-zinc-300">{s.value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
+      <ChartDataTable items={segments} centered />
     </div>
   );
 }

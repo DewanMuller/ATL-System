@@ -15,17 +15,10 @@ import { TextField, SubmitButton, AssigneeField } from "@/components/FormFields"
 import { canViewObjective } from "@/lib/okr";
 import { StatCard } from "@/components/preview/StatCard";
 import { Avatar } from "@/components/preview/Avatar";
+import { initialsFor } from "@/lib/user";
 
 function assigneeName(assignee: { name: string | null; email: string } | null) {
   return assignee ? assignee.name || assignee.email : "Unassigned";
-}
-
-function initialsFor(user: { name: string | null; email: string }) {
-  if (user.name) {
-    const parts = user.name.trim().split(/\s+/);
-    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  return user.email.slice(0, 2).toUpperCase();
 }
 
 function formatDate(d: Date | null) {

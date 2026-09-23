@@ -16,7 +16,7 @@ async function requireSuperAdminUserId() {
     where: { id: session.user.id },
     select: { id: true, isSuperAdmin: true },
   });
-  if (!user?.isSuperAdmin) throw new Error("Not authorized");
+  if (!user?.isSuperAdmin) redirect("/dashboard");
 
   return user.id;
 }

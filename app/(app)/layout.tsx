@@ -19,10 +19,19 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  const business = await prisma.business.findUnique({
-    where: { id: membership.businessId },
-    select: { name: true },
-  });
+  const [business, currentUser] = await Promise.all([
+    prisma.business.findUnique({
+      where: { id: membership.businessId },
+      select: { name: true },
+    }),
+    // Re-checked against the database rather than trusted from the JWT, so
+    // revoking admin access hides the Admin link on the very next request
+    // instead of waiting for the session to expire (see lib/admin.ts).
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isSuperAdmin: true },
+    }),
+  ]);
 
   if (!business) {
     redirect("/login");
@@ -59,7 +68,7 @@ export default async function AppLayout({
                 ? "Owner"
                 : "Member"
           }
-          isSuperAdmin={session.user.isSuperAdmin}
+          isSuperAdmin={currentUser?.isSuperAdmin ?? false}
         />
         <main className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black">
           <div className="mx-auto w-full max-w-5xl px-6 py-8">{children}</div>
