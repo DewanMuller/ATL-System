@@ -9,6 +9,19 @@ datasource db {
   provider = "sqlite"
 }
 
+// One row per rate-limited attempt (a failed login, a signup submission).
+// Sliding-window: checkRateLimit counts rows newer than `now - windowMs` for
+// a given key, so a burst ages out on its own with no separate reset job.
+// Kept as raw attempt rows (not a counter) so several independent windows —
+// e.g. per (ip, email) and per email alone — can share the same table.
+model RateLimitAttempt {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
 model User {
   id            String      @id @default(cuid())
   email         String      @unique

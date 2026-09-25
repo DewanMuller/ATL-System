@@ -1,15 +1,29 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { signIn, signOut } from "@/lib/auth";
 import { generateJoinCode, normalizeJoinCode } from "@/lib/joinCode";
 import { IMPERSONATION_COOKIE } from "@/lib/impersonation";
+import { getClientIp, isRateLimited, recordAttempt } from "@/lib/rateLimit";
 
 class InvalidJoinCodeError extends Error {}
 
+// Covers both join-code brute forcing and mass throwaway-account spam from
+// one source — every submission counts, not just failures, since a
+// successful join still consumes the same IP's budget.
+const SIGNUP_MAX_ATTEMPTS = 10;
+const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
+
 export async function signup(formData: FormData) {
+  const ip = getClientIp(await headers());
+  const rateLimitKey = `signup:ip:${ip}`;
+  if (await isRateLimited(rateLimitKey, SIGNUP_MAX_ATTEMPTS, SIGNUP_WINDOW_MS)) {
+    return { error: "Too many signup attempts. Please try again later." };
+  }
+  await recordAttempt(rateLimitKey);
+
   const businessName = String(formData.get("businessName") ?? "").trim();
   const joinCodeRaw = String(formData.get("joinCode") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();

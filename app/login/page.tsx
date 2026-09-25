@@ -24,7 +24,11 @@ export default function LoginPage() {
 
     setPending(false);
     if (res?.error) {
-      setError("Invalid email or password.");
+      setError(
+        res.code === "too_many_attempts"
+          ? "Too many login attempts. Please wait a while and try again."
+          : "Invalid email or password."
+      );
       return;
     }
     router.push("/dashboard");
