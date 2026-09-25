@@ -12,10 +12,15 @@ class TooManyAttemptsError extends CredentialsSignin {
 // - (ip, email): stops one attacker brute-forcing one account
 // - email alone: stops the same attack spread across many IPs
 // - ip alone: stops one attacker spraying many different emails
+// All three `key` functions share the same (ip, email) signature — even
+// though two of them ignore one param — so indexing into this array gives
+// TypeScript one concrete function shape instead of a union of different
+// arities (which would force every call site to satisfy the strictest one).
 const LOGIN_LIMITS = [
   { key: (ip: string, email: string) => `login:ipemail:${ip}:${email}`, max: 5, windowMs: 15 * 60 * 1000 },
   { key: (_ip: string, email: string) => `login:email:${email}`, max: 15, windowMs: 60 * 60 * 1000 },
-  { key: (ip: string) => `login:ip:${ip}`, max: 30, windowMs: 15 * 60 * 1000 },
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for a uniform (ip, email) shape across all three, see comment above
+  { key: (ip: string, _email: string) => `login:ip:${ip}`, max: 30, windowMs: 15 * 60 * 1000 },
 ];
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -33,11 +38,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!email || !password) return null;
 
         const ip = getClientIp(request.headers);
-        const keys = [
-          LOGIN_LIMITS[0].key(ip, email),
-          LOGIN_LIMITS[1].key(ip, email),
-          LOGIN_LIMITS[2].key(ip),
-        ];
+        const keys = LOGIN_LIMITS.map((limit) => limit.key(ip, email));
         for (const [i, limit] of LOGIN_LIMITS.entries()) {
           if (await isRateLimited(keys[i], limit.max, limit.windowMs)) {
             throw new TooManyAttemptsError();
