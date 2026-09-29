@@ -1,9 +1,10 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { signIn, signOut } from "@/lib/auth";
+import { auth, signIn, signOut } from "@/lib/auth";
 import { generateJoinCode, normalizeJoinCode } from "@/lib/joinCode";
 import { IMPERSONATION_COOKIE } from "@/lib/impersonation";
 import { getClientIp, isRateLimited, recordAttempt } from "@/lib/rateLimit";
@@ -21,6 +22,45 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 // the response they get back.
 const RESET_REQUESTED_MESSAGE =
   "If that email has an account, we've sent a link to reset the password.";
+
+const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Shared by signup (first send) and resendVerificationEmail (any later
+// send) — one place that generates+stores+emails a verification token, so
+// the two call sites can't drift on token lifetime or the "only one live
+// token" invalidation behavior.
+async function sendVerificationEmail(userId: string, email: string) {
+  const rawToken = generateToken();
+  const baseUrl = await getBaseUrl();
+
+  await prisma.$transaction([
+    prisma.emailVerificationToken.deleteMany({ where: { userId, usedAt: null } }),
+    prisma.emailVerificationToken.create({
+      data: {
+        userId,
+        tokenHash: hashToken(rawToken),
+        expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
+      },
+    }),
+  ]);
+
+  try {
+    await sendEmail({
+      to: email,
+      subject: "Verify your email — Above The Line",
+      html: `
+        <p>Welcome to Above The Line! Confirm your email address to finish setting up your account.</p>
+        <p><a href="${baseUrl}/verify-email?token=${rawToken}">Verify your email</a></p>
+        <p>This link expires in 24 hours.</p>
+      `,
+    });
+  } catch (error) {
+    // Same reasoning as requestPasswordReset: a send failure shouldn't
+    // crash signup/resend — the token still exists, Sentry gets the
+    // failure, and the user can always hit "resend" again.
+    Sentry.captureException(error);
+  }
+}
 
 // Covers both join-code brute forcing and mass throwaway-account spam from
 // one source — every submission counts, not just failures, since a
@@ -63,6 +103,7 @@ export async function signup(formData: FormData) {
 
   const hashed = await bcrypt.hash(password, 10);
 
+  let userId = "";
   try {
     await prisma.$transaction(async (tx) => {
       if (joinCodeRaw) {
@@ -73,6 +114,7 @@ export async function signup(formData: FormData) {
         const user = await tx.user.create({
           data: { email, password: hashed, name: name || null },
         });
+        userId = user.id;
         await tx.membership.create({
           data: { userId: user.id, businessId: business.id, role: "MEMBER" },
         });
@@ -86,6 +128,7 @@ export async function signup(formData: FormData) {
           },
           include: { business: true },
         });
+        userId = user.id;
         await tx.membership.create({
           data: { userId: user.id, businessId: user.business!.id, role: "OWNER" },
         });
@@ -97,6 +140,8 @@ export async function signup(formData: FormData) {
     }
     throw error;
   }
+
+  await sendVerificationEmail(userId, email);
 
   await signIn("credentials", {
     email,
@@ -191,6 +236,57 @@ export async function resetPassword(formData: FormData) {
     password,
     redirectTo: "/dashboard",
   });
+}
+
+export async function verifyEmail(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  if (!token) {
+    return { error: "This verification link is invalid." };
+  }
+
+  const verificationToken = await prisma.emailVerificationToken.findUnique({
+    where: { tokenHash: hashToken(token) },
+  });
+  if (!verificationToken || verificationToken.usedAt || verificationToken.expiresAt < new Date()) {
+    return { error: "This verification link is invalid or has expired." };
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: verificationToken.userId },
+      data: { emailVerifiedAt: new Date() },
+    }),
+    prisma.emailVerificationToken.update({
+      where: { id: verificationToken.id },
+      data: { usedAt: new Date() },
+    }),
+  ]);
+
+  return { success: true };
+}
+
+// Token-based, not session-based (see verifyEmail above) — but resending
+// needs to know WHO to send to, so this one does require being logged in
+// as the account in question. It's reached from the "verify your email"
+// block shown to a logged-in-but-unverified user (app/(app)/layout.tsx).
+export async function resendVerificationEmail() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const rateLimitKey = `verify-resend:user:${session.user.id}`;
+  if (await isRateLimited(rateLimitKey, 3, 60 * 60 * 1000)) {
+    return { error: "Too many resend attempts. Please wait a while and try again." };
+  }
+  await recordAttempt(rateLimitKey);
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (!user) redirect("/login");
+  if (user.emailVerifiedAt) {
+    return { message: "Your email is already verified." };
+  }
+
+  await sendVerificationEmail(user.id, user.email);
+  return { message: "Verification email sent — check your inbox." };
 }
 
 export async function logout() {

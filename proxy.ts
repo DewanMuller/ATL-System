@@ -9,7 +9,10 @@ export default auth((req) => {
   // password (e.g. from a different device) is a normal, valid case.
   const isLoginOrSignup = pathname === "/login" || pathname === "/signup";
   const isPublicPage =
-    isLoginOrSignup || pathname === "/forgot-password" || pathname === "/reset-password";
+    isLoginOrSignup ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname === "/verify-email";
 
   if (!isLoggedIn && !isPublicPage && pathname !== "/") {
     return NextResponse.redirect(new URL("/login", req.nextUrl));

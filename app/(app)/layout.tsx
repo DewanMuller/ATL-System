@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getSessionMembership } from "@/lib/business";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/Sidebar";
+import { EmailNotVerifiedNotice } from "@/components/EmailNotVerifiedNotice";
 import { stopImpersonation } from "@/app/actions/admin";
 
 export default async function AppLayout({
@@ -29,7 +30,7 @@ export default async function AppLayout({
     // instead of waiting for the session to expire (see lib/admin.ts).
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { isSuperAdmin: true },
+      select: { isSuperAdmin: true, emailVerifiedAt: true },
     }),
   ]);
 
@@ -71,7 +72,9 @@ export default async function AppLayout({
           isSuperAdmin={currentUser?.isSuperAdmin ?? false}
         />
         <main className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black">
-          <div className="mx-auto w-full max-w-5xl px-6 py-8">{children}</div>
+          <div className="mx-auto w-full max-w-5xl px-6 py-8">
+            {currentUser?.emailVerifiedAt ? children : <EmailNotVerifiedNotice />}
+          </div>
         </main>
       </div>
     </div>

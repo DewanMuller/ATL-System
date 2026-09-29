@@ -23,11 +23,16 @@ model RateLimitAttempt {
 }
 
 model User {
-  id            String      @id @default(cuid())
-  email         String      @unique
-  password      String
-  name          String?
-  isSuperAdmin  Boolean     @default(false)
+  id              String      @id @default(cuid())
+  email           String      @unique
+  password        String
+  name            String?
+  isSuperAdmin    Boolean     @default(false)
+  // Null means unverified. Existing accounts are backfilled to the
+  // migration time when this column was added (see its migration.sql) —
+  // verification only gates *new* signups, never locks out real users who
+  // predate the feature.
+  emailVerifiedAt DateTime?
   createdAt     DateTime    @default(now())
   business      Business?
   membership    Membership?
@@ -40,6 +45,7 @@ model User {
   assignedWinningMoves WinningMove[]
   impersonationLogs    ImpersonationLog[] @relation("ImpersonationLogsAsAdmin")
   passwordResetTokens  PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
 }
 
 // The token emailed to the user is high-entropy random data (see
@@ -48,6 +54,22 @@ model User {
 // someone's password. Single-use (usedAt) and short-lived (expiresAt);
 // requesting a new one deletes any prior unused tokens for that user.
 model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Same hash-only, single-use, expiring pattern as PasswordResetToken —
+// deliberately a separate table rather than a shared "purpose" column, so
+// each token type keeps its own lifetime/semantics (this one lasts 24h,
+// vs. 1h for a password reset) without conditionals leaking across both.
+model EmailVerificationToken {
   id        String    @id @default(cuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
