@@ -39,6 +39,24 @@ model User {
   assignedNextSteps    NextStep[]
   assignedWinningMoves WinningMove[]
   impersonationLogs    ImpersonationLog[] @relation("ImpersonationLogsAsAdmin")
+  passwordResetTokens  PasswordResetToken[]
+}
+
+// The token emailed to the user is high-entropy random data (see
+// lib/tokens.ts) — only its SHA-256 hash is stored here, same principle as
+// password hashing, so a database leak alone can't be used to reset
+// someone's password. Single-use (usedAt) and short-lived (expiresAt);
+// requesting a new one deletes any prior unused tokens for that user.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 enum MembershipRole {

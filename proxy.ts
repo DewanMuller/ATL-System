@@ -3,14 +3,19 @@ import { NextResponse } from "next/server";
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
-  const isAuthPage =
-    req.nextUrl.pathname === "/login" || req.nextUrl.pathname === "/signup";
+  const pathname = req.nextUrl.pathname;
+  // login/signup redirect an already-logged-in visitor to /dashboard —
+  // forgot/reset-password don't, since a logged-in user resetting their
+  // password (e.g. from a different device) is a normal, valid case.
+  const isLoginOrSignup = pathname === "/login" || pathname === "/signup";
+  const isPublicPage =
+    isLoginOrSignup || pathname === "/forgot-password" || pathname === "/reset-password";
 
-  if (!isLoggedIn && !isAuthPage && req.nextUrl.pathname !== "/") {
+  if (!isLoggedIn && !isPublicPage && pathname !== "/") {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 
-  if (isLoggedIn && isAuthPage) {
+  if (isLoggedIn && isLoginOrSignup) {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
   }
 });
