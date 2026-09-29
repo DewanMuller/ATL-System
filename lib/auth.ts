@@ -24,7 +24,16 @@ const LOGIN_LIMITS = [
 ];
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    // Deliberate choice, not the library default (30 days with a 1-day
+    // rolling refresh) — this is a B2B tool holding real strategic/business
+    // data, not a low-sensitivity consumer app. A session rolls forward on
+    // activity (so an actively-used session never interrupts a workday),
+    // but 24h of no activity at all requires logging in again.
+    maxAge: 24 * 60 * 60,
+    updateAge: 60 * 60,
+  },
   pages: { signIn: "/login" },
   providers: [
     Credentials({
