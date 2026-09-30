@@ -17,7 +17,7 @@ import { formatQuarterLabel } from "@/lib/quarter";
 import { canViewObjective } from "@/lib/okr";
 import { StatCard } from "@/components/preview/StatCard";
 import { Avatar } from "@/components/preview/Avatar";
-import { initialsFor } from "@/lib/user";
+import { initialsFor, nameFor } from "@/lib/user";
 
 function assigneeName(assignee: { name: string | null; email: string } | null) {
   return assignee ? assignee.name || assignee.email : "Unassigned";
@@ -43,13 +43,13 @@ function formatMonthLabel(month: string) {
 function contextLabel(step: {
   objective: { title: string } | null;
   keyResult: { metric: string } | null;
-  weeklyCheckIn: { weekOf: Date; personName: string } | null;
+  weeklyCheckIn: { weekOf: Date; user: { name: string | null; email: string } } | null;
   monthlyReview: { month: string } | null;
   quarterlyReview: { quarter: string } | null;
   otherContext: string | null;
 }) {
   if (step.weeklyCheckIn) {
-    return `WRAP · ${formatDate(step.weeklyCheckIn.weekOf)} (${step.weeklyCheckIn.personName})`;
+    return `WRAP · ${formatDate(step.weeklyCheckIn.weekOf)} (${nameFor(step.weeklyCheckIn.user)})`;
   }
   if (step.monthlyReview) {
     return `MRAP · ${formatMonthLabel(step.monthlyReview.month)}`;
@@ -76,7 +76,7 @@ export default async function NextStepsPage() {
             include: {
               objective: { select: { title: true } },
               keyResult: { select: { metric: true } },
-              weeklyCheckIn: { select: { weekOf: true, personName: true } },
+              weeklyCheckIn: { select: { weekOf: true, user: { select: { name: true, email: true } } } },
               monthlyReview: { select: { month: true } },
               quarterlyReview: { select: { quarter: true } },
               assignee: { select: { id: true, name: true, email: true } },
@@ -99,7 +99,7 @@ export default async function NextStepsPage() {
             orderBy: { createdAt: "asc" },
           },
           weeklyCheckIns: {
-            select: { id: true, weekOf: true, personName: true },
+            select: { id: true, weekOf: true, user: { select: { name: true, email: true } } },
             orderBy: { weekOf: "desc" },
           },
           monthlyReviews: {
@@ -147,7 +147,7 @@ export default async function NextStepsPage() {
   ).map((o) => ({ id: o.id, title: o.title }));
   const weeklyCheckInOptions = business.weeklyCheckIns.map((c) => ({
     id: c.id,
-    label: `${formatDate(c.weekOf)} — ${c.personName}`,
+    label: `${formatDate(c.weekOf)} — ${nameFor(c.user)}`,
   }));
   const monthlyReviewOptions = business.monthlyReviews.map((m) => ({
     id: m.id,

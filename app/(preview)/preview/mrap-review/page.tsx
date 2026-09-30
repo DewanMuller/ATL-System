@@ -4,7 +4,8 @@ import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { ProgressBar } from "@/components/ProgressBar";
 import { currentOkrAverage } from "@/lib/okr";
-import { WELLBEING_LABELS, currentMonthString, formatMonthLabel, monthlyPulse } from "@/lib/mrap";
+import { currentMonthString, formatMonthLabel, monthlyPulse } from "@/lib/mrap";
+import { wellbeingLabel } from "@/lib/wellbeing";
 
 export default async function PreviewMrapReviewPage({
   searchParams,
@@ -96,9 +97,9 @@ export default async function PreviewMrapReviewPage({
           <StatCard
             label="Team wellbeing"
             value={
-              pulse.avgWellbeing != null ? WELLBEING_LABELS[Math.round(pulse.avgWellbeing)] : "—"
+              pulse.avgWellbeing != null ? wellbeingLabel(Math.round(pulse.avgWellbeing)) : "—"
             }
-            progress={pulse.avgWellbeing != null ? (pulse.avgWellbeing / 5) * 100 : null}
+            progress={pulse.avgWellbeing != null ? (pulse.avgWellbeing / 10) * 100 : null}
           />
           <StatCard
             label="Goal completion"
@@ -149,7 +150,7 @@ export default async function PreviewMrapReviewPage({
             </h4>
             <span className="text-xs text-zinc-500 dark:text-zinc-400">
               OKR {review.okrAveragePct != null ? `${Math.round(review.okrAveragePct)}%` : "—"} · Wellbeing{" "}
-              {p.avgWellbeing != null ? WELLBEING_LABELS[Math.round(p.avgWellbeing)] : "—"} · Goals{" "}
+              {p.avgWellbeing != null ? wellbeingLabel(Math.round(p.avgWellbeing)) : "—"} · Goals{" "}
               {p.avgGoalCompletion != null ? `${Math.round(p.avgGoalCompletion)}%` : "—"}
             </span>
 

@@ -24,24 +24,7 @@ import {
   type Rag,
 } from "@/components/preview/colors";
 import { initialsFor, nameFor } from "@/lib/user";
-
-// The real 1–5 scale and labels already established on the WRAP page
-// (app/(app)/wrap/page.tsx) — reused here rather than inventing a separate
-// banding scheme, since this is the one ATL already asks people to submit.
-const WELLBEING_LABELS: Record<number, string> = {
-  1: "Struggling",
-  2: "Coping",
-  3: "Steady",
-  4: "Good",
-  5: "Thriving",
-};
-const WELLBEING_PILL_CLASS: Record<number, string> = {
-  1: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-  2: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  3: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  4: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  5: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-};
+import { wellbeingLabel, wellbeingPillClass } from "@/lib/wellbeing";
 
 // A 5-bucket RAG for the OKR Status Breakdown donut — distinct from the
 // plain 3-band ragForPercent(), since "Completed" (100%) and "Not started"
@@ -120,7 +103,7 @@ export default async function DashboardPage() {
             latest
               ? prisma.weeklyCheckIn.findMany({
                   where: { businessId: membership.businessId, weekOf: latest.weekOf },
-                  select: { weekOf: true, personName: true, wellbeingScore: true },
+                  select: { weekOf: true, wellbeingScore: true },
                 })
               : []
           )
@@ -198,13 +181,17 @@ export default async function DashboardPage() {
     return { label: d.name, value: Math.round(avg), color: catVar(((i % 8) + 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8) };
   });
 
-  // ---------- Wellbeing Scorecard (real WeeklyCheckIn.wellbeingScore, 1–5) ----------
+  // ---------- Wellbeing Scorecard (real WeeklyCheckIn.wellbeingScore, 0–10) ----------
   const wellbeingAvg =
     thisWeekCheckIns.length > 0
       ? thisWeekCheckIns.reduce((sum, c) => sum + c.wellbeingScore, 0) / thisWeekCheckIns.length
       : null;
-  const wellbeingCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  for (const c of thisWeekCheckIns) wellbeingCounts[c.wellbeingScore] = (wellbeingCounts[c.wellbeingScore] ?? 0) + 1;
+  const wellbeingBandCounts = new Map<string, { count: number; pillClass: string }>();
+  for (const c of thisWeekCheckIns) {
+    const label = wellbeingLabel(c.wellbeingScore);
+    const existing = wellbeingBandCounts.get(label);
+    wellbeingBandCounts.set(label, { count: (existing?.count ?? 0) + 1, pillClass: wellbeingPillClass(c.wellbeingScore) });
+  }
 
   // ---------- Next Steps status (real substitute for "MRAP Submission Status") ----------
   const nextStepCounts = { GREEN: 0, AMBER: 0, RED: 0 };
@@ -345,22 +332,20 @@ export default async function DashboardPage() {
           {wellbeingAvg != null && (
             <span
               className="text-2xl font-bold"
-              style={{ color: ragHex(wellbeingAvg >= 4 ? "GREEN" : wellbeingAvg >= 2.5 ? "AMBER" : "RED") }}
+              style={{ color: ragHex(wellbeingAvg >= 7 ? "GREEN" : wellbeingAvg >= 5 ? "AMBER" : "RED") }}
             >
               {wellbeingAvg.toFixed(1)}
-              <span className="text-sm font-medium text-zinc-400">/5</span>
+              <span className="text-sm font-medium text-zinc-400">/10</span>
             </span>
           )}
         </div>
         {thisWeekCheckIns.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {[1, 2, 3, 4, 5]
-              .filter((score) => wellbeingCounts[score] > 0)
-              .map((score) => (
-                <span key={score} className={`rounded-full px-2.5 py-1 text-xs font-medium ${WELLBEING_PILL_CLASS[score]}`}>
-                  {WELLBEING_LABELS[score]}: {wellbeingCounts[score]}
-                </span>
-              ))}
+            {[...wellbeingBandCounts.entries()].map(([label, { count, pillClass }]) => (
+              <span key={label} className={`rounded-full px-2.5 py-1 text-xs font-medium ${pillClass}`}>
+                {label}: {count}
+              </span>
+            ))}
           </div>
         )}
       </div>

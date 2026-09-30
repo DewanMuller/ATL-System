@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getSessionBusinessId } from "@/lib/business";
 import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
-import { WELLBEING_LABELS, formatMonthLabel, monthlyPulse } from "@/lib/mrap";
+import { formatMonthLabel, monthlyPulse } from "@/lib/mrap";
+import { wellbeingLabel } from "@/lib/wellbeing";
 
 export default async function PreviewCompanyMrapPage() {
   const businessId = await getSessionBusinessId();
@@ -107,7 +108,7 @@ function ReviewCard({
       <h4 className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMonthLabel(review.month)}</h4>
       <span className="text-xs text-zinc-500 dark:text-zinc-400">
         OKR {review.okrAveragePct != null ? `${Math.round(review.okrAveragePct)}%` : "—"} · Wellbeing{" "}
-        {pulse.avgWellbeing != null ? WELLBEING_LABELS[Math.round(pulse.avgWellbeing)] : "—"} · Goals{" "}
+        {pulse.avgWellbeing != null ? wellbeingLabel(Math.round(pulse.avgWellbeing)) : "—"} · Goals{" "}
         {pulse.avgGoalCompletion != null ? `${Math.round(pulse.avgGoalCompletion)}%` : "—"}
       </span>
 

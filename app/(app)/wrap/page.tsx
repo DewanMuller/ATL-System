@@ -1,29 +1,15 @@
 import Link from "next/link";
 import { Users, Smile, Target } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { getSessionBusinessId } from "@/lib/business";
+import { getSessionMembership } from "@/lib/business";
 import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { createWeeklyCheckIn, deleteWeeklyCheckIn } from "@/app/actions/wrap";
 import { StatCard } from "@/components/preview/StatCard";
 import { RagBar } from "@/components/preview/RagBar";
 import { ragHex } from "@/components/preview/colors";
-
-const WELLBEING_LABELS: Record<number, string> = {
-  1: "Struggling",
-  2: "Coping",
-  3: "Steady",
-  4: "Good",
-  5: "Thriving",
-};
-
-const WELLBEING_PILL_CLASS: Record<number, string> = {
-  1: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-  2: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  3: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  4: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  5: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-};
+import { WELLBEING_MIN, WELLBEING_MAX, wellbeingLabel, wellbeingPillClass, wellbeingAsPercent } from "@/lib/wellbeing";
+import { nameFor } from "@/lib/user";
 
 const TABS = [
   { key: "submit", label: "This week" },
@@ -53,7 +39,8 @@ function mostRecentMonday() {
 
 type CheckIn = {
   id: string;
-  personName: string;
+  userId: string;
+  user: { name: string | null; email: string };
   weekOf: Date;
   wellbeingScore: number;
   goalCompletionPct: number;
@@ -62,34 +49,36 @@ type CheckIn = {
   priorities: string | null;
 };
 
-function CheckInCard({ c }: { c: CheckIn }) {
+function CheckInCard({ c, canDelete }: { c: CheckIn; canDelete: boolean }) {
   return (
     <div className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-950">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            {c.personName}
+            {nameFor(c.user)}
           </h3>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
             Week of {formatDate(c.weekOf)}
           </span>
         </div>
-        <form action={deleteWeeklyCheckIn.bind(null, c.id)}>
-          <button
-            type="submit"
-            className="text-xs text-zinc-400 hover:text-red-600"
-          >
-            Delete
-          </button>
-        </form>
+        {canDelete && (
+          <form action={deleteWeeklyCheckIn.bind(null, c.id)}>
+            <button
+              type="submit"
+              className="text-xs text-zinc-400 hover:text-red-600"
+            >
+              Delete
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <span className={`self-start rounded-full px-2.5 py-0.5 text-xs font-medium ${WELLBEING_PILL_CLASS[c.wellbeingScore]}`}>
-            Wellbeing: {WELLBEING_LABELS[c.wellbeingScore]}
+          <span className={`self-start rounded-full px-2.5 py-0.5 text-xs font-medium ${wellbeingPillClass(c.wellbeingScore)}`}>
+            Wellbeing: {wellbeingLabel(c.wellbeingScore)} ({c.wellbeingScore}/10)
           </span>
-          <RagBar value={(c.wellbeingScore / 5) * 100} />
+          <RagBar value={wellbeingAsPercent(c.wellbeingScore)} />
         </div>
         <div className="flex flex-col gap-1.5">
           <span
@@ -148,12 +137,8 @@ export default async function WrapPage({
   const { tab: tabParam } = await searchParams;
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : "submit";
 
-  const businessId = await getSessionBusinessId();
-  const business = businessId
-    ? await prisma.business.findUnique({ where: { id: businessId } })
-    : null;
-
-  if (!business) {
+  const membership = await getSessionMembership();
+  if (!membership) {
     return (
       <div className="p-8 text-sm text-zinc-500">
         No business found for this account.
@@ -161,14 +146,22 @@ export default async function WrapPage({
     );
   }
 
-  if (!(await isBusinessEntitled(business.id, "wrap"))) {
+  if (!(await isBusinessEntitled(membership.businessId, "wrap"))) {
     return <InactiveNotice />;
   }
 
-  const checkIns = await prisma.weeklyCheckIn.findMany({
-    where: { businessId: business.id },
-    orderBy: [{ weekOf: "desc" }, { createdAt: "desc" }],
-  });
+  const [checkIns, members] = await Promise.all([
+    prisma.weeklyCheckIn.findMany({
+      where: { businessId: membership.businessId },
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: [{ weekOf: "desc" }, { createdAt: "desc" }],
+    }),
+    prisma.membership.findMany({
+      where: { businessId: membership.businessId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
 
   const avgWellbeing = average(checkIns.map((c) => c.wellbeingScore));
   const avgGoalCompletion = average(checkIns.map((c) => c.goalCompletionPct));
@@ -177,6 +170,10 @@ export default async function WrapPage({
   const thisWeekCheckIns = checkIns.filter(
     (c) => c.weekOf.toISOString().slice(0, 10) === currentWeek
   );
+  const thisWeekUserIds = new Set(thisWeekCheckIns.map((c) => c.userId));
+  const outstandingMembers = members.filter((m) => !thisWeekUserIds.has(m.userId));
+
+  const myCheckInThisWeek = thisWeekCheckIns.find((c) => c.userId === membership.userId) ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -186,7 +183,7 @@ export default async function WrapPage({
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           A quick per-person pulse each week — wellbeing, goal progress, and
-          what&apos;s in the way. Feeds next month&apos;s review.
+          what&apos;s in the way. Feeds next month&apos;s MRAP.
         </p>
       </div>
 
@@ -194,8 +191,8 @@ export default async function WrapPage({
         <StatCard label="Check-ins" value={String(checkIns.length)} icon={Users} iconClassName="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400" />
         <StatCard
           label="Avg wellbeing"
-          value={avgWellbeing != null ? WELLBEING_LABELS[Math.round(avgWellbeing)] : "—"}
-          caption={avgWellbeing != null ? `${avgWellbeing.toFixed(1)}/5` : undefined}
+          value={avgWellbeing != null ? wellbeingLabel(Math.round(avgWellbeing)) : "—"}
+          caption={avgWellbeing != null ? `${avgWellbeing.toFixed(1)}/10` : undefined}
           icon={Smile}
           iconClassName="bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400"
         />
@@ -227,13 +224,13 @@ export default async function WrapPage({
         <>
           <div className="rounded-xl border border-dashed border-black/15 p-5 dark:border-white/15">
             <p className="mb-3 text-sm font-medium text-zinc-600 dark:text-zinc-300">
-              Add check-in
+              {myCheckInThisWeek ? "Update your check-in" : "Add your check-in"}
             </p>
             <form
+              key={`${myCheckInThisWeek?.id ?? "new"}-${myCheckInThisWeek?.wellbeingScore}-${myCheckInThisWeek?.goalCompletionPct}`}
               action={createWeeklyCheckIn}
               className="grid grid-cols-1 gap-3 sm:grid-cols-2"
             >
-              <Field label="Person" name="personName" required />
               <Field
                 label="Week of"
                 name="weekOf"
@@ -243,16 +240,16 @@ export default async function WrapPage({
               />
               <label className="flex flex-col gap-1 text-sm">
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Wellbeing
+                  Wellbeing (0 = In Crisis, 10 = Excelling)
                 </span>
                 <select
                   name="wellbeingScore"
-                  defaultValue={3}
+                  defaultValue={myCheckInThisWeek?.wellbeingScore ?? 5}
                   className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
                 >
-                  {[1, 2, 3, 4, 5].map((v) => (
+                  {Array.from({ length: WELLBEING_MAX - WELLBEING_MIN + 1 }, (_, i) => WELLBEING_MAX - i).map((v) => (
                     <option key={v} value={v}>
-                      {v} – {WELLBEING_LABELS[v]}
+                      {v} – {wellbeingLabel(v)}
                     </option>
                   ))}
                 </select>
@@ -262,31 +259,45 @@ export default async function WrapPage({
                 name="goalCompletionPct"
                 type="number"
                 step="any"
-                defaultValue={0}
+                defaultValue={myCheckInThisWeek?.goalCompletionPct ?? 0}
                 required
               />
-              <Field label="Highlights" name="highlights" full />
-              <Field label="Blockers" name="blockers" full />
-              <Field label="Priorities for next week" name="priorities" full />
+              <Field label="Highlights" name="highlights" defaultValue={myCheckInThisWeek?.highlights ?? undefined} full />
+              <Field label="Blockers" name="blockers" defaultValue={myCheckInThisWeek?.blockers ?? undefined} full />
+              <Field label="Priorities for next week" name="priorities" defaultValue={myCheckInThisWeek?.priorities ?? undefined} full />
               <button
                 type="submit"
                 className="self-end rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200 sm:col-span-2"
               >
-                Add check-in
+                {myCheckInThisWeek ? "Update check-in" : "Add check-in"}
               </button>
             </form>
           </div>
 
-          <div className="flex flex-col gap-3 pb-12">
+          <div className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              This week&apos;s check-ins ({thisWeekCheckIns.length})
+              This week ({thisWeekCheckIns.length} of {members.length} submitted)
             </h2>
+            {outstandingMembers.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {outstandingMembers.map((m) => (
+                  <span
+                    key={m.id}
+                    className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                  >
+                    {nameFor(m.user)} — outstanding
+                  </span>
+                ))}
+              </div>
+            )}
             {thisWeekCheckIns.length === 0 ? (
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 No check-ins for this week yet — add yours above.
               </p>
             ) : (
-              thisWeekCheckIns.map((c) => <CheckInCard key={c.id} c={c} />)
+              thisWeekCheckIns.map((c) => (
+                <CheckInCard key={c.id} c={c} canDelete={c.userId === membership.userId || membership.role === "OWNER"} />
+              ))
             )}
           </div>
         </>
@@ -295,7 +306,7 @@ export default async function WrapPage({
       {tab === "history" && (
         <div className="flex flex-col gap-3 pb-12">
           {checkIns.map((c) => (
-            <CheckInCard key={c.id} c={c} />
+            <CheckInCard key={c.id} c={c} canDelete={c.userId === membership.userId || membership.role === "OWNER"} />
           ))}
 
           {checkIns.length === 0 && (

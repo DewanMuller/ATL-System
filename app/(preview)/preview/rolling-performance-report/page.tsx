@@ -65,7 +65,7 @@ export default async function PreviewRollingPerformanceReportPage() {
 
   const wellbeingItems = months.map((m, i) => ({
     label: formatMonthShort(m),
-    value: pulseByMonth[i].avgWellbeing != null ? Math.round((pulseByMonth[i].avgWellbeing! / 5) * 100) : 0,
+    value: pulseByMonth[i].avgWellbeing != null ? Math.round((pulseByMonth[i].avgWellbeing! / 10) * 100) : 0,
     color: catVar(2),
   }));
 

@@ -15,14 +15,7 @@ import {
   quarterRange,
   shiftQuarter,
 } from "@/lib/quarter";
-
-const WELLBEING_LABELS: Record<number, string> = {
-  1: "Struggling",
-  2: "Coping",
-  3: "Steady",
-  4: "Good",
-  5: "Thriving",
-};
+import { wellbeingLabel } from "@/lib/wellbeing";
 
 const TABS = [
   { key: "submit", label: "Submit" },
@@ -276,7 +269,7 @@ export default async function QrapPage({
             label="Team wellbeing"
             value={
               pulse.avgWellbeing != null
-                ? WELLBEING_LABELS[Math.round(pulse.avgWellbeing)]
+                ? wellbeingLabel(Math.round(pulse.avgWellbeing))
                 : "—"
             }
             icon={Smile}

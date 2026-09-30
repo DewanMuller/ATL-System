@@ -6,7 +6,8 @@ import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { currentOkrAverage } from "@/lib/okr";
 import { saveMonthlyReview, deleteMonthlyReview } from "@/app/actions/mrap";
-import { WELLBEING_LABELS, currentMonthString, formatMonthLabel, monthlyPulse } from "@/lib/mrap";
+import { currentMonthString, formatMonthLabel, monthlyPulse } from "@/lib/mrap";
+import { wellbeingLabel } from "@/lib/wellbeing";
 import { buildDepartmentRollups } from "@/lib/departmentRollup";
 import { StatCard } from "@/components/preview/StatCard";
 import { ragForPercent, ragHex, ragBadgeClasses, type Rag } from "@/components/preview/colors";
@@ -250,7 +251,7 @@ export default async function MrapPage({
                     OKR {review.okrAveragePct != null ? `${Math.round(review.okrAveragePct)}%` : "—"} ·
                     {" "}Wellbeing{" "}
                     {p.avgWellbeing != null
-                      ? WELLBEING_LABELS[Math.round(p.avgWellbeing)]
+                      ? wellbeingLabel(Math.round(p.avgWellbeing))
                       : "—"}{" "}
                     · Goals{" "}
                     {p.avgGoalCompletion != null
@@ -365,7 +366,7 @@ export default async function MrapPage({
             label="Team wellbeing"
             value={
               pulse.avgWellbeing != null
-                ? WELLBEING_LABELS[Math.round(pulse.avgWellbeing)]
+                ? wellbeingLabel(Math.round(pulse.avgWellbeing))
                 : "—"
             }
             icon={Smile}

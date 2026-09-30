@@ -6,6 +6,7 @@ import { updateNextStepStatus, updateNextStepAssignee } from "@/app/actions/busi
 import { StatusSelect } from "@/components/StatusSelect";
 import { AssigneeSelect } from "@/components/AssigneeSelect";
 import { formatQuarterLabel } from "@/lib/quarter";
+import { nameFor } from "@/lib/user";
 
 function assigneeName(assignee: { name: string | null; email: string } | null) {
   return assignee ? assignee.name || assignee.email : "Unassigned";
@@ -31,13 +32,13 @@ function formatMonthLabel(month: string) {
 function contextLabel(step: {
   objective: { title: string } | null;
   keyResult: { metric: string } | null;
-  weeklyCheckIn: { weekOf: Date; personName: string } | null;
+  weeklyCheckIn: { weekOf: Date; user: { name: string | null; email: string } } | null;
   monthlyReview: { month: string } | null;
   quarterlyReview: { quarter: string } | null;
   otherContext: string | null;
 }) {
   if (step.weeklyCheckIn) {
-    return `WRAP · ${formatDate(step.weeklyCheckIn.weekOf)} (${step.weeklyCheckIn.personName})`;
+    return `WRAP · ${formatDate(step.weeklyCheckIn.weekOf)} (${nameFor(step.weeklyCheckIn.user)})`;
   }
   if (step.monthlyReview) {
     return `MRAP · ${formatMonthLabel(step.monthlyReview.month)}`;
@@ -64,7 +65,7 @@ export default async function PreviewNextStepsPage() {
             include: {
               objective: { select: { title: true } },
               keyResult: { select: { metric: true } },
-              weeklyCheckIn: { select: { weekOf: true, personName: true } },
+              weeklyCheckIn: { select: { weekOf: true, user: { select: { name: true, email: true } } } },
               monthlyReview: { select: { month: true } },
               quarterlyReview: { select: { quarter: true } },
               assignee: { select: { id: true, name: true, email: true } },

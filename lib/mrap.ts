@@ -1,15 +1,8 @@
 import { prisma } from "@/lib/prisma";
 
-// Shared by /mrap, /preview/submit-mrap, /preview/mrap-review,
-// /preview/company-mrap and /preview/rolling-performance-report so the
-// month math and wellbeing labels never drift between them.
-export const WELLBEING_LABELS: Record<number, string> = {
-  1: "Struggling",
-  2: "Coping",
-  3: "Steady",
-  4: "Good",
-  5: "Thriving",
-};
+// Wellbeing labels/bands live in lib/wellbeing.ts (shared with WRAP) — this
+// file only has the month math, so it and the dashboard/QRAP never drift on
+// what "5" or "Coping" means.
 
 export function currentMonthString() {
   const now = new Date();

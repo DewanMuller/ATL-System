@@ -4,6 +4,7 @@ import { getAtlEntitlement, isModuleEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
 import { formatMonthShort, monthlyPulse } from "@/lib/mrap";
 import { formatQuarterLabel } from "@/lib/quarter";
+import { wellbeingAsPercent } from "@/lib/wellbeing";
 import { VerticalBarChart } from "@/components/preview/charts/VerticalBarChart";
 import { CATEGORICAL_SCOPE_CLASS, catVar } from "@/components/preview/colors";
 
@@ -65,7 +66,7 @@ export default async function RollingPerformanceReportPage() {
 
   const wellbeingItems = months.map((m, i) => ({
     label: formatMonthShort(m),
-    value: pulseByMonth[i].avgWellbeing != null ? Math.round((pulseByMonth[i].avgWellbeing! / 5) * 100) : 0,
+    value: pulseByMonth[i].avgWellbeing != null ? Math.round(wellbeingAsPercent(pulseByMonth[i].avgWellbeing!)) : 0,
     color: catVar(2),
   }));
 

@@ -48,6 +48,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   dueDateRequestsMade    DueDateChangeRequest[] @relation("DueDateRequestedBy")
   dueDateRequestsDecided DueDateChangeRequest[] @relation("DueDateDecidedBy")
+  weeklyCheckIns         WeeklyCheckIn[]
 }
 
 // The token emailed to the user is high-entropy random data (see
@@ -482,12 +483,20 @@ model NextStep {
   @@index([businessId, assigneeId])
 }
 
+// Tied to a real User (not a free-text name) so MRAP can later compute real
+// submission adherence against the actual member roster and per-person
+// wellbeing trends — see the MRAP Close-Out Report spec this is built
+// towards. wellbeingScore is 0–10 (see lib/wellbeing.ts for the 6 bands,
+// including "In Crisis" at 0), matching BGC's real Level-1 MRAP template
+// rather than an invented scale. One check-in per person per week —
+// resubmitting the same week updates it instead of creating a duplicate.
 model WeeklyCheckIn {
   id                String   @id @default(cuid())
   businessId        String
   business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   weekOf            DateTime
-  personName        String
   wellbeingScore    Int
   goalCompletionPct Float
   highlights        String?
@@ -497,6 +506,7 @@ model WeeklyCheckIn {
 
   nextSteps NextStep[]
 
+  @@unique([userId, weekOf])
   @@index([businessId, weekOf])
 }
 
