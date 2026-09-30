@@ -410,6 +410,7 @@ model Initiative {
   updatedAt         DateTime  @updatedAt
 
   dueDateChangeRequests DueDateChangeRequest[]
+  weeklyCheckIns        InitiativeCheckIn[]
 
   @@index([keyResultId])
 }
@@ -498,16 +499,46 @@ model WeeklyCheckIn {
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   weekOf            DateTime
   wellbeingScore    Int
+  // Auto-computed from this week's InitiativeCheckIn rows (GREEN=100,
+  // AMBER=50, RED=0), not typed by hand — see createWeeklyCheckIn. Kept as
+  // a plain stored Float so QRAP/MRAP rollups (lib/mrap.ts, qrap/page.tsx)
+  // keep reading it exactly as before.
   goalCompletionPct Float
+  // Overall, not-tied-to-one-initiative notes — per-initiative blockers and
+  // next-week priorities live on InitiativeCheckIn instead, matching BGC's
+  // real Level 1 template (overall wins/blockers *and* separate per-KR notes).
   highlights        String?
   blockers          String?
   priorities        String?
   createdAt         DateTime @default(now())
 
-  nextSteps NextStep[]
+  nextSteps          NextStep[]
+  initiativeCheckIns InitiativeCheckIn[]
 
   @@unique([userId, weekOf])
   @@index([businessId, weekOf])
+}
+
+// One row per (initiative, week) — how the initiative's owner says it's
+// going this week. status answers "how did last week's stated focus go"
+// (the WRAP page shows last week's `priorities` text as that context right
+// next to this field); `priorities` here is this week's stated focus for
+// next week, which the following week's check-in then carries forward the
+// same way. This is the per-initiative granularity the WRAP page's overall
+// wellbeing/highlights/blockers/priorities fields don't capture.
+model InitiativeCheckIn {
+  id              String        @id @default(cuid())
+  weeklyCheckInId String
+  weeklyCheckIn   WeeklyCheckIn @relation(fields: [weeklyCheckInId], references: [id], onDelete: Cascade)
+  initiativeId    String
+  initiative      Initiative    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  status          RagStatus     @default(AMBER)
+  blockers        String?
+  priorities      String?
+  createdAt       DateTime      @default(now())
+
+  @@unique([weeklyCheckInId, initiativeId])
+  @@index([initiativeId])
 }
 
 model MonthlyReview {
