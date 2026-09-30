@@ -87,6 +87,14 @@ export default async function DashboardPage() {
             include: { user: { select: { id: true, name: true, email: true } } },
             orderBy: { createdAt: "asc" },
           },
+          // Visible to the business owner (see "Admin access" card below) so
+          // support access is disclosed to the customer, not just kept in
+          // the platform admin's own audit trail.
+          impersonationLogs: {
+            include: { admin: { select: { name: true, email: true } } },
+            orderBy: { startedAt: "desc" },
+            take: 5,
+          },
         },
       })
     : null;
@@ -566,6 +574,39 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {isOwner && business.impersonationLogs.length > 0 && (
+        <div>
+          <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Admin access
+          </h2>
+          <div className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-950">
+            <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+              Business Game Changers staff occasionally sign in as your account for
+              support purposes. Here&apos;s a record of when that happened.
+            </p>
+            <div className="flex flex-col gap-1">
+              {business.impersonationLogs.map((log) => (
+                <div key={log.id} className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-800 dark:text-zinc-200">
+                    {log.admin.name || log.admin.email}
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    {log.startedAt.toLocaleString("en-ZA", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {log.endedAt ? "" : " — ongoing"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
