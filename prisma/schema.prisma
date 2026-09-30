@@ -46,6 +46,8 @@ model User {
   impersonationLogs    ImpersonationLog[] @relation("ImpersonationLogsAsAdmin")
   passwordResetTokens  PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  dueDateRequestsMade    DueDateChangeRequest[] @relation("DueDateRequestedBy")
+  dueDateRequestsDecided DueDateChangeRequest[] @relation("DueDateDecidedBy")
 }
 
 // The token emailed to the user is high-entropy random data (see
@@ -118,6 +120,7 @@ model Business {
   quarterlyReviews QuarterlyReview[]
   issues           Issue[]
   impersonationLogs ImpersonationLog[]
+  dueDateChangeRequests DueDateChangeRequest[]
   createdAt        DateTime          @default(now())
 }
 
@@ -405,7 +408,42 @@ model Initiative {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
+  dueDateChangeRequests DueDateChangeRequest[]
+
   @@index([keyResultId])
+}
+
+enum DueDateRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Part A (Initiative.dueDate) is owner-only to edit directly — see
+// app/actions/okr.ts's updateInitiative — so the person actually doing the
+// work has no way to push a date out except asking. This is that ask: the
+// Initiative's Responsible person or its Objective's Lead can request a new
+// due date; only an Owner can approve it, at which point Initiative.dueDate
+// is actually updated. Rejecting leaves the due date untouched.
+model DueDateChangeRequest {
+  id               String               @id @default(cuid())
+  businessId       String
+  business         Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  initiativeId     String
+  initiative       Initiative           @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  requestedById    String
+  requestedBy      User                 @relation("DueDateRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  currentDueDate   DateTime
+  requestedDueDate DateTime
+  reason           String?
+  status           DueDateRequestStatus @default(PENDING)
+  decidedById      String?
+  decidedBy        User?                @relation("DueDateDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt        DateTime?
+  createdAt        DateTime             @default(now())
+
+  @@index([businessId, status])
+  @@index([initiativeId])
 }
 
 enum RagStatus {
