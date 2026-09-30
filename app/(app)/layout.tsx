@@ -21,11 +21,11 @@ export default async function AppLayout({
   }
 
   // A valid, well-formed session with no matching Membership is an orphaned
-  // session (see app/api/session-reset/route.ts) — redirecting straight to
+  // session (see app/session-reset/page.tsx) — redirecting straight to
   // /login here would loop forever, since proxy.ts would just see the
   // still-valid JWT and send them right back to /dashboard.
   if (!membership) {
-    redirect("/api/session-reset");
+    redirect("/session-reset");
   }
 
   const [business, currentUser] = await Promise.all([
@@ -43,7 +43,7 @@ export default async function AppLayout({
   ]);
 
   if (!business) {
-    redirect("/api/session-reset");
+    redirect("/session-reset");
   }
 
   const isImpersonating = membership.id === "impersonation";

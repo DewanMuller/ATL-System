@@ -14,7 +14,8 @@ export default auth((req) => {
     pathname === "/reset-password" ||
     pathname === "/verify-email" ||
     pathname === "/privacy" ||
-    pathname === "/terms";
+    pathname === "/terms" ||
+    pathname === "/session-reset";
 
   if (!isLoggedIn && !isPublicPage && pathname !== "/") {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
