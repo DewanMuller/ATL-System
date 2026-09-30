@@ -12,7 +12,9 @@ export default auth((req) => {
     isLoginOrSignup ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
-    pathname === "/verify-email";
+    pathname === "/verify-email" ||
+    pathname === "/privacy" ||
+    pathname === "/terms";
 
   if (!isLoggedIn && !isPublicPage && pathname !== "/") {
     return NextResponse.redirect(new URL("/login", req.nextUrl));

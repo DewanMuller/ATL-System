@@ -67,6 +67,12 @@ export default function SignupPage() {
           </button>
         </form>
 
+        <p className="mt-4 text-xs text-zinc-400 dark:text-zinc-500">
+          By creating an account, you agree to our{" "}
+          <Link href="/terms" className="underline">Terms of Service</Link> and{" "}
+          <Link href="/privacy" className="underline">Privacy Policy</Link>.
+        </p>
+
         <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
           Already have an account?{" "}
           <Link href="/login" className="font-medium underline">
