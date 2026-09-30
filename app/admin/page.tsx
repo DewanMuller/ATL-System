@@ -4,6 +4,8 @@ import {
   startImpersonation,
   stopImpersonation,
   setAtlEntitlement,
+  findRemovableUser,
+  removeUserAccount,
 } from "@/app/actions/admin";
 import { getImpersonatedBusinessId } from "@/lib/impersonation";
 import { ATL_PRODUCT_SLUG } from "@/lib/entitlements";
@@ -17,10 +19,16 @@ function formatDate(d: Date) {
   }).format(d);
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lookupEmail?: string }>;
+}) {
   await requireSuperAdmin();
 
-  const [businesses, impersonatingBusinessId] = await Promise.all([
+  const { lookupEmail } = await searchParams;
+
+  const [businesses, impersonatingBusinessId, lookupResult] = await Promise.all([
     prisma.business.findMany({
       include: {
         owner: { select: { name: true, email: true } },
@@ -32,6 +40,7 @@ export default async function AdminPage() {
       orderBy: { createdAt: "desc" },
     }),
     getImpersonatedBusinessId(),
+    lookupEmail ? findRemovableUser(lookupEmail) : null,
   ]);
 
   const activeCount = businesses.filter((b) =>
@@ -186,6 +195,75 @@ export default async function AdminPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-950">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Free up an email
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          A user&apos;s email belongs to exactly one business, permanently — there&apos;s no
+          self-service way to leave. Look up an email here to see what&apos;s tied to it and,
+          if it&apos;s safe, remove the account so they can sign up fresh elsewhere.
+        </p>
+
+        <form method="GET" className="mt-4 flex gap-2">
+          <input
+            type="email"
+            name="lookupEmail"
+            defaultValue={lookupEmail}
+            placeholder="person@example.com"
+            className="w-full max-w-xs rounded-md border border-black/10 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+          <button
+            type="submit"
+            className="rounded-md border border-black/10 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50 dark:border-white/10 dark:hover:bg-zinc-900"
+          >
+            Look up
+          </button>
+        </form>
+
+        {lookupResult && !lookupResult.found && (
+          <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+            No account with that email.
+          </p>
+        )}
+
+        {lookupResult?.found && (
+          <div className="mt-3 rounded-lg border border-black/10 p-3 text-sm dark:border-white/10">
+            <p className="text-zinc-800 dark:text-zinc-200">
+              {lookupResult.name || lookupResult.email} —{" "}
+              {lookupResult.businessName ? (
+                <>
+                  {lookupResult.role === "OWNER" ? "owns" : "member of"}{" "}
+                  <strong>{lookupResult.businessName}</strong>
+                </>
+              ) : (
+                "no business membership"
+              )}
+            </p>
+
+            {lookupResult.blockedReasons.length > 0 && (
+              <ul className="mt-2 list-disc pl-5 text-xs text-amber-700 dark:text-amber-400">
+                {lookupResult.blockedReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            )}
+
+            {lookupResult.canRemove && (
+              <form action={removeUserAccount} className="mt-3">
+                <input type="hidden" name="userId" value={lookupResult.userId} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
+                >
+                  Remove account
+                </button>
+              </form>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
