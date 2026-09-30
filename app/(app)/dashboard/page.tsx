@@ -54,50 +54,71 @@ function okrBucket(score: number | null): "COMPLETED" | Rag | "NOT_STARTED" {
 
 export default async function DashboardPage() {
   const membership = await getSessionMembership();
-  const business = membership
-    ? await prisma.business.findUnique({
-        where: { id: membership.businessId },
-        include: {
-          bhag: true,
-          bhagMetrics: {
-            orderBy: { order: "asc" },
-            include: { targets: { include: { period: true }, orderBy: { period: { order: "desc" } }, take: 1 } },
-          },
-          departments: { orderBy: { order: "asc" } },
-          objectives: {
-            include: {
-              lead: { select: { id: true, name: true, email: true } },
-              department: { select: { id: true, name: true, order: true } },
-              contributors: { select: { userId: true } },
-              keyResults: {
-                include: {
-                  responsibleUser: { select: { id: true } },
-                  initiatives: {
-                    select: { dueDate: true, outcomePercent: true, responsibleUserId: true },
+  const [business, thisWeekCheckIns] = await Promise.all([
+    membership
+      ? prisma.business.findUnique({
+          where: { id: membership.businessId },
+          include: {
+            bhag: true,
+            bhagMetrics: {
+              orderBy: { order: "asc" },
+              include: { targets: { include: { period: true }, orderBy: { period: { order: "desc" } }, take: 1 } },
+            },
+            departments: { orderBy: { order: "asc" } },
+            objectives: {
+              include: {
+                lead: { select: { id: true, name: true, email: true } },
+                department: { select: { id: true, name: true, order: true } },
+                contributors: { select: { userId: true } },
+                keyResults: {
+                  include: {
+                    responsibleUser: { select: { id: true } },
+                    initiatives: {
+                      select: { dueDate: true, outcomePercent: true, responsibleUserId: true },
+                    },
                   },
                 },
               },
+              orderBy: { createdAt: "asc" },
             },
-            orderBy: { createdAt: "asc" },
+            nextSteps: { select: { status: true } },
+            winningMoves: { select: { status: true, assigneeId: true } },
+            members: {
+              include: { user: { select: { id: true, name: true, email: true } } },
+              orderBy: { createdAt: "asc" },
+            },
+            // Visible to the business owner (see "Admin access" card below) so
+            // support access is disclosed to the customer, not just kept in
+            // the platform admin's own audit trail.
+            impersonationLogs: {
+              include: { admin: { select: { name: true, email: true } } },
+              orderBy: { startedAt: "desc" },
+              take: 5,
+            },
           },
-          nextSteps: { select: { status: true } },
-          winningMoves: { select: { status: true, assigneeId: true } },
-          weeklyCheckIns: { orderBy: { weekOf: "desc" }, select: { weekOf: true, personName: true, wellbeingScore: true } },
-          members: {
-            include: { user: { select: { id: true, name: true, email: true } } },
-            orderBy: { createdAt: "asc" },
-          },
-          // Visible to the business owner (see "Admin access" card below) so
-          // support access is disclosed to the customer, not just kept in
-          // the platform admin's own audit trail.
-          impersonationLogs: {
-            include: { admin: { select: { name: true, email: true } } },
-            orderBy: { startedAt: "desc" },
-            take: 5,
-          },
-        },
-      })
-    : null;
+        })
+      : null,
+    // Only the most recent week's check-ins are ever shown here — fetched as
+    // its own bounded query (find the latest weekOf, then just that week's
+    // rows) instead of pulling every WeeklyCheckIn the business has ever
+    // submitted, which would grow unbounded over the life of the account.
+    membership
+      ? prisma.weeklyCheckIn
+          .findFirst({
+            where: { businessId: membership.businessId },
+            orderBy: { weekOf: "desc" },
+            select: { weekOf: true },
+          })
+          .then((latest) =>
+            latest
+              ? prisma.weeklyCheckIn.findMany({
+                  where: { businessId: membership.businessId, weekOf: latest.weekOf },
+                  select: { weekOf: true, personName: true, wellbeingScore: true },
+                })
+              : []
+          )
+      : Promise.resolve([]),
+  ]);
 
   if (!business || !membership) {
     return (
@@ -122,10 +143,7 @@ export default async function DashboardPage() {
   const now = new Date();
 
   // ---------- Team Check-In Completion (real WeeklyCheckIn data) ----------
-  const latestWeek = business.weeklyCheckIns[0]?.weekOf ?? null;
-  const thisWeekCheckIns = latestWeek
-    ? business.weeklyCheckIns.filter((c) => c.weekOf.getTime() === latestWeek.getTime())
-    : [];
+  const latestWeek = thisWeekCheckIns[0]?.weekOf ?? null;
   const totalMembers = business.members.length;
   const checkInPct = totalMembers > 0 ? Math.round((thisWeekCheckIns.length / totalMembers) * 100) : 0;
 

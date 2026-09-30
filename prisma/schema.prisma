@@ -94,6 +94,8 @@ model Membership {
   business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   role       MembershipRole @default(MEMBER)
   createdAt  DateTime       @default(now())
+
+  @@index([businessId])
 }
 
 model Business {
@@ -130,6 +132,9 @@ model ImpersonationLog {
   business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   startedAt  DateTime  @default(now())
   endedAt    DateTime?
+
+  @@index([businessId])
+  @@index([adminId])
 }
 
 // The BHAG's qualitative "vision statement" — the numbers themselves live on
@@ -178,6 +183,8 @@ model BhagMetric {
   updatedAt    DateTime             @updatedAt
   targets      BhagMetricTarget[]
   snapshots    BhagMetricSnapshot[]
+
+  @@index([businessId])
 }
 
 // The target for one metric at one time horizon (one cell in the
@@ -206,6 +213,8 @@ model BhagMetricSnapshot {
   metric     BhagMetric @relation(fields: [metricId], references: [id], onDelete: Cascade)
   value      Float?
   recordedAt DateTime   @default(now())
+
+  @@index([metricId])
 }
 
 // A BGC-sellable product (e.g. "atl"). One row per product, regardless of
@@ -252,6 +261,8 @@ model WinningMove {
   status      RagStatus  @default(AMBER)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  @@index([businessId, assigneeId])
 }
 
 enum PeriodType {
@@ -377,6 +388,8 @@ model KeyResult {
   nextSteps         NextStep[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
+
+  @@index([objectiveId])
 }
 
 model Initiative {
@@ -391,6 +404,8 @@ model Initiative {
   comments          String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  @@index([keyResultId])
 }
 
 enum RagStatus {
@@ -425,6 +440,8 @@ model NextStep {
   updatedAt   DateTime   @updatedAt
 
   issue Issue?
+
+  @@index([businessId, assigneeId])
 }
 
 model WeeklyCheckIn {
@@ -441,6 +458,8 @@ model WeeklyCheckIn {
   createdAt         DateTime @default(now())
 
   nextSteps NextStep[]
+
+  @@index([businessId, weekOf])
 }
 
 model MonthlyReview {
@@ -500,4 +519,6 @@ model Issue {
   escalatedToQuarter  String?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
+
+  @@index([businessId])
 }
