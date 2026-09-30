@@ -20,11 +20,23 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  // A valid, well-formed session with no matching Membership is an orphaned
-  // session (see app/session-reset/page.tsx) — redirecting straight to
-  // /login here would loop forever, since proxy.ts would just see the
-  // still-valid JWT and send them right back to /dashboard.
   if (!membership) {
+    // A super admin doesn't need a personal business — they manage other
+    // businesses' accounts via impersonation on /admin (a top-level route,
+    // not wrapped by this layout), not their own OKR data. Route them
+    // there directly instead of treating "no membership" as broken.
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isSuperAdmin: true },
+    });
+    if (user?.isSuperAdmin) {
+      redirect("/admin");
+    }
+
+    // Otherwise this is a genuinely orphaned session (see
+    // app/session-reset/page.tsx) — redirecting straight to /login here
+    // would loop forever, since proxy.ts would just see the still-valid
+    // JWT and send them right back to /dashboard.
     redirect("/session-reset");
   }
 
