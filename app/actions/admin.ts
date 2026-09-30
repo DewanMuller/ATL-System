@@ -179,3 +179,39 @@ export async function removeUserAccount(formData: FormData) {
 
   revalidatePath("/admin");
 }
+
+// Membership.role decides who gets Owner-level visibility (see lib/okr.ts's
+// canViewObjective/canEditOutcome and every isOwner check across the app) —
+// distinct from Business.ownerId, which just tracks the original creator
+// for cascade-delete purposes. Nothing stops more than one Membership from
+// holding OWNER on the same business (e.g. a whole EXCO), but signup only
+// ever grants it to whoever created the business; there was previously no
+// way to grant or revoke it afterward. Deliberately admin-only rather than
+// self-service — an existing Owner reassigning roles on their own business
+// is a real feature some businesses may want later, but isn't what was
+// asked for here.
+export async function setMembershipRole(formData: FormData) {
+  await requireSuperAdminUserId();
+
+  const membershipId = String(formData.get("membershipId") ?? "");
+  const role = String(formData.get("role") ?? "");
+  if (role !== "OWNER" && role !== "MEMBER") return;
+
+  const membership = await prisma.membership.findUnique({ where: { id: membershipId } });
+  if (!membership) return;
+
+  if (role === "MEMBER" && membership.role === "OWNER") {
+    const ownerCount = await prisma.membership.count({
+      where: { businessId: membership.businessId, role: "OWNER" },
+    });
+    // Never let a business end up with zero Owners — nobody could manage
+    // its join code, entitlements, or see the full picture afterward.
+    if (ownerCount <= 1) return;
+  }
+
+  await prisma.membership.update({ where: { id: membershipId }, data: { role } });
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/business/${membership.businessId}`);
+  revalidatePath("/dashboard");
+}

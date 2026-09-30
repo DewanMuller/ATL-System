@@ -1,5 +1,6 @@
 import { Users, TrendingUp, AlertTriangle, Clock, CheckCircle2, FileText, ListChecks, Target, Trophy } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { getSessionMembership } from "@/lib/business";
 import { isBusinessEntitled } from "@/lib/entitlements";
 import { InactiveNotice } from "@/components/InactiveNotice";
@@ -53,7 +54,12 @@ function okrBucket(score: number | null): "COMPLETED" | Rag | "NOT_STARTED" {
 }
 
 export default async function DashboardPage() {
-  const membership = await getSessionMembership();
+  const [membership, session] = await Promise.all([getSessionMembership(), auth()]);
+  // Whether the *actual account* is a platform admin — distinct from
+  // membership.role === "OWNER", which is also true while impersonating.
+  // The Admin access card must only ever be visible to real BGC staff, not
+  // the business's own Owner(s) (see dashboard/page.tsx's card below).
+  const isRealSuperAdmin = session?.user?.isSuperAdmin ?? false;
   const [business, thisWeekCheckIns] = await Promise.all([
     membership
       ? prisma.business.findUnique({
@@ -87,9 +93,10 @@ export default async function DashboardPage() {
               include: { user: { select: { id: true, name: true, email: true } } },
               orderBy: { createdAt: "asc" },
             },
-            // Visible to the business owner (see "Admin access" card below) so
-            // support access is disclosed to the customer, not just kept in
-            // the platform admin's own audit trail.
+            // Rendered in the "Admin access" card below, visible only to
+            // real platform admins (isRealSuperAdmin) — never to the
+            // business's own Owner(s), even though impersonation itself
+            // grants OWNER-level membership.role.
             impersonationLogs: {
               include: { admin: { select: { name: true, email: true } } },
               orderBy: { startedAt: "desc" },
@@ -593,7 +600,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {isOwner && business.impersonationLogs.length > 0 && (
+      {isRealSuperAdmin && business.impersonationLogs.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             Admin access

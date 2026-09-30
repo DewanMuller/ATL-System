@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/admin";
 import {
@@ -121,7 +122,9 @@ export default async function AdminPage({
                   className="border-t border-black/10 bg-white dark:border-white/10 dark:bg-zinc-950"
                 >
                   <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">
-                    {b.name}
+                    <Link href={`/admin/business/${b.id}`} className="hover:underline">
+                      {b.name}
+                    </Link>
                     {b.id === impersonatingBusinessId && (
                       <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                         Impersonating
