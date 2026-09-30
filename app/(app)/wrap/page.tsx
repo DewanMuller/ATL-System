@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Users, Smile, Target } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionBusinessId } from "@/lib/business";
@@ -24,6 +25,11 @@ const WELLBEING_PILL_CLASS: Record<number, string> = {
   5: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
 };
 
+const TABS = [
+  { key: "submit", label: "This week" },
+  { key: "history", label: "History" },
+] as const;
+
 function average(values: number[]) {
   if (values.length === 0) return null;
   return values.reduce((a, b) => a + b, 0) / values.length;
@@ -45,7 +51,103 @@ function mostRecentMonday() {
   return now.toISOString().slice(0, 10);
 }
 
-export default async function WrapPage() {
+type CheckIn = {
+  id: string;
+  personName: string;
+  weekOf: Date;
+  wellbeingScore: number;
+  goalCompletionPct: number;
+  highlights: string | null;
+  blockers: string | null;
+  priorities: string | null;
+};
+
+function CheckInCard({ c }: { c: CheckIn }) {
+  return (
+    <div className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-950">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
+            {c.personName}
+          </h3>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            Week of {formatDate(c.weekOf)}
+          </span>
+        </div>
+        <form action={deleteWeeklyCheckIn.bind(null, c.id)}>
+          <button
+            type="submit"
+            className="text-xs text-zinc-400 hover:text-red-600"
+          >
+            Delete
+          </button>
+        </form>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <span className={`self-start rounded-full px-2.5 py-0.5 text-xs font-medium ${WELLBEING_PILL_CLASS[c.wellbeingScore]}`}>
+            Wellbeing: {WELLBEING_LABELS[c.wellbeingScore]}
+          </span>
+          <RagBar value={(c.wellbeingScore / 5) * 100} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span
+            className="text-xs font-medium"
+            style={{ color: ragHex(c.goalCompletionPct >= 70 ? "GREEN" : c.goalCompletionPct >= 40 ? "AMBER" : "RED") }}
+          >
+            Goal completion: {Math.round(c.goalCompletionPct)}%
+          </span>
+          <RagBar value={c.goalCompletionPct} />
+        </div>
+      </div>
+
+      {(c.highlights || c.blockers || c.priorities) && (
+        <dl className="mt-3 flex flex-col gap-1 text-sm">
+          {c.highlights && (
+            <div>
+              <dt className="inline font-medium text-zinc-600 dark:text-zinc-300">
+                Highlights:{" "}
+              </dt>
+              <dd className="inline text-zinc-600 dark:text-zinc-400">
+                {c.highlights}
+              </dd>
+            </div>
+          )}
+          {c.blockers && (
+            <div>
+              <dt className="inline font-medium text-zinc-600 dark:text-zinc-300">
+                Blockers:{" "}
+              </dt>
+              <dd className="inline text-zinc-600 dark:text-zinc-400">
+                {c.blockers}
+              </dd>
+            </div>
+          )}
+          {c.priorities && (
+            <div>
+              <dt className="inline font-medium text-zinc-600 dark:text-zinc-300">
+                Priorities:{" "}
+              </dt>
+              <dd className="inline text-zinc-600 dark:text-zinc-400">
+                {c.priorities}
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+export default async function WrapPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab: tabParam } = await searchParams;
+  const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : "submit";
+
   const businessId = await getSessionBusinessId();
   const business = businessId
     ? await prisma.business.findUnique({ where: { id: businessId } })
@@ -70,6 +172,11 @@ export default async function WrapPage() {
 
   const avgWellbeing = average(checkIns.map((c) => c.wellbeingScore));
   const avgGoalCompletion = average(checkIns.map((c) => c.goalCompletionPct));
+
+  const currentWeek = mostRecentMonday();
+  const thisWeekCheckIns = checkIns.filter(
+    (c) => c.weekOf.toISOString().slice(0, 10) === currentWeek
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -100,144 +207,105 @@ export default async function WrapPage() {
         />
       </div>
 
-      <div className="rounded-xl border border-dashed border-black/15 p-5 dark:border-white/15">
-        <p className="mb-3 text-sm font-medium text-zinc-600 dark:text-zinc-300">
-          Add check-in
-        </p>
-        <form
-          action={createWeeklyCheckIn}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-        >
-          <Field label="Person" name="personName" required />
-          <Field
-            label="Week of"
-            name="weekOf"
-            type="date"
-            defaultValue={mostRecentMonday()}
-            required
-          />
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">
-              Wellbeing
-            </span>
-            <select
-              name="wellbeingScore"
-              defaultValue={3}
-              className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
-            >
-              {[1, 2, 3, 4, 5].map((v) => (
-                <option key={v} value={v}>
-                  {v} – {WELLBEING_LABELS[v]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Field
-            label="Goal completion %"
-            name="goalCompletionPct"
-            type="number"
-            step="any"
-            defaultValue={0}
-            required
-          />
-          <Field label="Highlights" name="highlights" full />
-          <Field label="Blockers" name="blockers" full />
-          <Field label="Priorities for next week" name="priorities" full />
-          <button
-            type="submit"
-            className="self-end rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200 sm:col-span-2"
+      <div className="flex gap-1 overflow-x-auto rounded-lg border border-black/10 p-1 dark:border-white/10">
+        {TABS.map((t) => (
+          <Link
+            key={t.key}
+            href={`/wrap?tab=${t.key}`}
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === t.key
+                ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900"
+                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            }`}
           >
-            Add check-in
-          </button>
-        </form>
+            {t.label}
+          </Link>
+        ))}
       </div>
 
-      <div className="flex flex-col gap-3 pb-12">
-        {checkIns.map((c) => (
-          <div
-            key={c.id}
-            className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-950"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-                  {c.personName}
-                </h3>
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Week of {formatDate(c.weekOf)}
+      {tab === "submit" && (
+        <>
+          <div className="rounded-xl border border-dashed border-black/15 p-5 dark:border-white/15">
+            <p className="mb-3 text-sm font-medium text-zinc-600 dark:text-zinc-300">
+              Add check-in
+            </p>
+            <form
+              action={createWeeklyCheckIn}
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+            >
+              <Field label="Person" name="personName" required />
+              <Field
+                label="Week of"
+                name="weekOf"
+                type="date"
+                defaultValue={currentWeek}
+                required
+              />
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Wellbeing
                 </span>
-              </div>
-              <form action={deleteWeeklyCheckIn.bind(null, c.id)}>
-                <button
-                  type="submit"
-                  className="text-xs text-zinc-400 hover:text-red-600"
+                <select
+                  name="wellbeingScore"
+                  defaultValue={3}
+                  className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
                 >
-                  Delete
-                </button>
-              </form>
-            </div>
+                  {[1, 2, 3, 4, 5].map((v) => (
+                    <option key={v} value={v}>
+                      {v} – {WELLBEING_LABELS[v]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Field
+                label="Goal completion %"
+                name="goalCompletionPct"
+                type="number"
+                step="any"
+                defaultValue={0}
+                required
+              />
+              <Field label="Highlights" name="highlights" full />
+              <Field label="Blockers" name="blockers" full />
+              <Field label="Priorities for next week" name="priorities" full />
+              <button
+                type="submit"
+                className="self-end rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200 sm:col-span-2"
+              >
+                Add check-in
+              </button>
+            </form>
+          </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <span className={`self-start rounded-full px-2.5 py-0.5 text-xs font-medium ${WELLBEING_PILL_CLASS[c.wellbeingScore]}`}>
-                  Wellbeing: {WELLBEING_LABELS[c.wellbeingScore]}
-                </span>
-                <RagBar value={(c.wellbeingScore / 5) * 100} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span
-                  className="text-xs font-medium"
-                  style={{ color: ragHex(c.goalCompletionPct >= 70 ? "GREEN" : c.goalCompletionPct >= 40 ? "AMBER" : "RED") }}
-                >
-                  Goal completion: {Math.round(c.goalCompletionPct)}%
-                </span>
-                <RagBar value={c.goalCompletionPct} />
-              </div>
-            </div>
-
-            {(c.highlights || c.blockers || c.priorities) && (
-              <dl className="mt-3 flex flex-col gap-1 text-sm">
-                {c.highlights && (
-                  <div>
-                    <dt className="inline font-medium text-zinc-600 dark:text-zinc-300">
-                      Highlights:{" "}
-                    </dt>
-                    <dd className="inline text-zinc-600 dark:text-zinc-400">
-                      {c.highlights}
-                    </dd>
-                  </div>
-                )}
-                {c.blockers && (
-                  <div>
-                    <dt className="inline font-medium text-zinc-600 dark:text-zinc-300">
-                      Blockers:{" "}
-                    </dt>
-                    <dd className="inline text-zinc-600 dark:text-zinc-400">
-                      {c.blockers}
-                    </dd>
-                  </div>
-                )}
-                {c.priorities && (
-                  <div>
-                    <dt className="inline font-medium text-zinc-600 dark:text-zinc-300">
-                      Priorities:{" "}
-                    </dt>
-                    <dd className="inline text-zinc-600 dark:text-zinc-400">
-                      {c.priorities}
-                    </dd>
-                  </div>
-                )}
-              </dl>
+          <div className="flex flex-col gap-3 pb-12">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              This week&apos;s check-ins ({thisWeekCheckIns.length})
+            </h2>
+            {thisWeekCheckIns.length === 0 ? (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                No check-ins for this week yet — add yours above.
+              </p>
+            ) : (
+              thisWeekCheckIns.map((c) => <CheckInCard key={c.id} c={c} />)
             )}
           </div>
-        ))}
+        </>
+      )}
 
-        {checkIns.length === 0 && (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            No check-ins yet. Add this week&apos;s above.
-          </p>
-        )}
-      </div>
+      {tab === "history" && (
+        <div className="flex flex-col gap-3 pb-12">
+          {checkIns.map((c) => (
+            <CheckInCard key={c.id} c={c} />
+          ))}
+
+          {checkIns.length === 0 && (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              No check-ins yet. Add this week&apos;s on the &quot;This
+              week&quot; tab.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

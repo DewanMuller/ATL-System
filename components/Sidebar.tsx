@@ -17,6 +17,7 @@ import {
   ClipboardCheck,
   CalendarDays,
   CalendarRange,
+  LineChart,
   AlertTriangle,
   Boxes,
   Shield,
@@ -57,6 +58,7 @@ const NAV_GROUPS = [
       { href: "/wrap", label: "Weekly Check-ins", icon: ClipboardCheck },
       { href: "/mrap", label: "Monthly Review", icon: CalendarDays },
       { href: "/qrap", label: "Quarterly Review", icon: CalendarRange },
+      { href: "/rolling-performance-report", label: "Performance Trends", icon: LineChart },
     ],
   },
   {
