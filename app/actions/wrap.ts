@@ -1,21 +1,47 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { RagStatus } from "@prisma/client";
+import type { RagStatus, MeasureType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireMembership } from "@/lib/business";
-import { parseOptionalDate } from "@/lib/forms";
+import { parseOptionalDate, parseOptionalFloat } from "@/lib/forms";
 import { WELLBEING_MIN, WELLBEING_MAX } from "@/lib/wellbeing";
+import { computeOutcomePercent } from "@/lib/measure";
+import { ragForPercent } from "@/components/preview/colors";
 
 const RAG_TO_PERCENT: Record<RagStatus, number> = { GREEN: 100, AMBER: 50, RED: 0 };
 const VALID_RAG = new Set<string>(["GREEN", "AMBER", "RED"]);
 
-function readInitiativeFields(formData: FormData, initiativeId: string) {
-  const statusRaw = String(formData.get(`status-${initiativeId}`) ?? "AMBER");
-  const status: RagStatus = VALID_RAG.has(statusRaw) ? (statusRaw as RagStatus) : "AMBER";
-  const blockers = String(formData.get(`blockers-${initiativeId}`) ?? "") || null;
-  const priorities = String(formData.get(`priorities-${initiativeId}`) ?? "") || null;
-  return { status, blockers, priorities };
+type OwnedInitiative = {
+  id: string;
+  measureType: MeasureType;
+  targetValue: number | null;
+  startValue: number | null;
+};
+
+// MANUAL initiatives keep today's hand-picked RAG. BINARY/NUMERIC ones
+// report an actual value instead — the RAG and the week's outcomePercent
+// are both derived from it (see lib/measure.ts), not chosen separately, so
+// "how's it going" always matches the real number.
+function readInitiativeFields(formData: FormData, initiative: OwnedInitiative) {
+  const blockers = String(formData.get(`blockers-${initiative.id}`) ?? "") || null;
+  const priorities = String(formData.get(`priorities-${initiative.id}`) ?? "") || null;
+
+  if (initiative.measureType === "MANUAL") {
+    const statusRaw = String(formData.get(`status-${initiative.id}`) ?? "AMBER");
+    const status: RagStatus = VALID_RAG.has(statusRaw) ? (statusRaw as RagStatus) : "AMBER";
+    return { id: initiative.id, status, reportedValue: null as number | null, measuredPercent: null as number | null, blockers, priorities };
+  }
+
+  const reportedValue = parseOptionalFloat(formData.get(`value-${initiative.id}`));
+  const measuredPercent = computeOutcomePercent({
+    measureType: initiative.measureType,
+    startValue: initiative.startValue,
+    targetValue: initiative.targetValue,
+    currentValue: reportedValue,
+  });
+  const status: RagStatus = measuredPercent == null ? "AMBER" : ragForPercent(measuredPercent);
+  return { id: initiative.id, status, reportedValue, measuredPercent, blockers, priorities };
 }
 
 // Each member submits their own check-in, tied to their own session — not a
@@ -23,10 +49,10 @@ function readInitiativeFields(formData: FormData, initiativeId: string) {
 // (see the @@unique([userId, weekOf]) constraint) rather than creating a
 // duplicate, since this is meant to be correctable, not append-only.
 //
-// goalCompletionPct is no longer typed by hand: it's the average of this
-// week's per-initiative RAG (GREEN=100/AMBER=50/RED=0) across everything the
-// submitter owns, so "goal progress" reflects the same initiatives the rest
-// of the form reports on rather than a separate, disconnected guess.
+// goalCompletionPct is no longer typed by hand: for MANUAL initiatives it's
+// the RAG bucketed to a percent (GREEN=100/AMBER=50/RED=0) same as before;
+// for BINARY/NUMERIC it uses the real computed percent instead of the
+// bucketed approximation, since a real number is available.
 export async function createWeeklyCheckIn(formData: FormData) {
   const membership = await requireMembership();
 
@@ -43,12 +69,12 @@ export async function createWeeklyCheckIn(formData: FormData) {
   // report progress on an initiative they don't own by crafting form fields.
   const myInitiatives = await prisma.initiative.findMany({
     where: { responsibleUserId: membership.userId, keyResult: { objective: { businessId: membership.businessId } } },
-    select: { id: true },
+    select: { id: true, measureType: true, targetValue: true, startValue: true },
   });
-  const initiativeUpdates = myInitiatives.map((i) => ({ id: i.id, ...readInitiativeFields(formData, i.id) }));
+  const initiativeUpdates = myInitiatives.map((i) => readInitiativeFields(formData, i));
   const goalCompletionPct =
     initiativeUpdates.length > 0
-      ? initiativeUpdates.reduce((sum, u) => sum + RAG_TO_PERCENT[u.status], 0) / initiativeUpdates.length
+      ? initiativeUpdates.reduce((sum, u) => sum + (u.measuredPercent ?? RAG_TO_PERCENT[u.status]), 0) / initiativeUpdates.length
       : 0;
 
   const data = {
@@ -74,14 +100,31 @@ export async function createWeeklyCheckIn(formData: FormData) {
     for (const u of initiativeUpdates) {
       await tx.initiativeCheckIn.upsert({
         where: { weeklyCheckInId_initiativeId: { weeklyCheckInId: checkIn.id, initiativeId: u.id } },
-        create: { weeklyCheckInId: checkIn.id, initiativeId: u.id, status: u.status, blockers: u.blockers, priorities: u.priorities },
-        update: { status: u.status, blockers: u.blockers, priorities: u.priorities },
+        create: {
+          weeklyCheckInId: checkIn.id,
+          initiativeId: u.id,
+          status: u.status,
+          reportedValue: u.reportedValue,
+          blockers: u.blockers,
+          priorities: u.priorities,
+        },
+        update: { status: u.status, reportedValue: u.reportedValue, blockers: u.blockers, priorities: u.priorities },
       });
+
+      if (u.reportedValue != null) {
+        await tx.initiative.update({
+          where: { id: u.id },
+          data: { currentValue: u.reportedValue, outcomePercent: u.measuredPercent },
+        });
+      }
     }
   });
 
   revalidatePath("/wrap");
   revalidatePath("/dashboard");
+  revalidatePath("/okrs");
+  revalidatePath("/okrs/[id]", "page");
+  revalidatePath("/my-work");
 }
 
 export async function deleteWeeklyCheckIn(checkInId: string) {

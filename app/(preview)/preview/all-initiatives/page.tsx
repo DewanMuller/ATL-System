@@ -66,6 +66,11 @@ export default async function AllInitiativesPage() {
         keyResultMetric: kr.metric,
         department: o.department?.name ?? "No department",
         canEdit: canEditOutcome(membership, o, i.responsibleUserId),
+        measureType: i.measureType,
+        targetValue: i.targetValue,
+        startValue: i.startValue,
+        currentValue: i.currentValue,
+        unit: i.unit,
       }))
     )
   );

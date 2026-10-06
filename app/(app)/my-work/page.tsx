@@ -89,6 +89,11 @@ export default async function MyWorkPage() {
           keyResultMetric: kr.metric,
           department: o.department?.name ?? "No department",
           canEdit: true,
+          measureType: i.measureType,
+          targetValue: i.targetValue,
+          startValue: i.startValue,
+          currentValue: i.currentValue,
+          unit: i.unit,
         }))
     )
   );

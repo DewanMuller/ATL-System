@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { MeasureType } from "@prisma/client";
 
 export function OutcomeEditor({
   action,
@@ -8,12 +9,20 @@ export function OutcomeEditor({
   id,
   outcomePercent,
   comments,
+  measureType = "MANUAL",
+  currentValue,
+  targetValue,
+  unit,
 }: {
   action: (formData: FormData) => Promise<void> | void;
   idField: string;
   id: string;
   outcomePercent: number | null;
   comments: string | null;
+  measureType?: MeasureType;
+  currentValue?: number | null;
+  targetValue?: number | null;
+  unit?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
@@ -43,16 +52,43 @@ export function OutcomeEditor({
   return (
     <form action={handleSubmit} className="flex flex-wrap items-center gap-1.5">
       <input type="hidden" name={idField} value={id} />
-      <input
-        type="number"
-        step="any"
-        min={0}
-        max={100}
-        name="outcomePercent"
-        defaultValue={outcomePercent ?? undefined}
-        placeholder="%"
-        className="w-14 rounded-md border border-black/10 bg-white px-1.5 py-1 text-xs text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
-      />
+      {measureType === "MANUAL" && (
+        <input
+          type="number"
+          step="any"
+          min={0}
+          max={100}
+          name="outcomePercent"
+          defaultValue={outcomePercent ?? undefined}
+          placeholder="%"
+          className="w-14 rounded-md border border-black/10 bg-white px-1.5 py-1 text-xs text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+        />
+      )}
+      {measureType === "BINARY" && (
+        <select
+          name="currentValue"
+          defaultValue={currentValue != null && currentValue >= 1 ? "1" : "0"}
+          className="rounded-md border border-black/10 bg-white px-1.5 py-1 text-xs text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+        >
+          <option value="0">Not done</option>
+          <option value="1">Done</option>
+        </select>
+      )}
+      {measureType === "NUMERIC" && (
+        <span className="flex items-center gap-1">
+          <input
+            type="number"
+            step="any"
+            name="currentValue"
+            defaultValue={currentValue ?? undefined}
+            placeholder="0"
+            className="w-16 rounded-md border border-black/10 bg-white px-1.5 py-1 text-xs text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+          <span className="text-[11px] text-zinc-400">
+            / {targetValue ?? "—"} {unit}
+          </span>
+        </span>
+      )}
       <input
         type="text"
         name="comments"

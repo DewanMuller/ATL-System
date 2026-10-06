@@ -101,6 +101,11 @@ export default async function OkrDetailPage({
       owner: { initials: initialsFor(i.responsibleUser), name: nameFor(i.responsibleUser) },
       comments: i.comments,
       canEdit: canEditOutcome(membership, objective, i.responsibleUserId),
+      measureType: i.measureType,
+      targetValue: i.targetValue,
+      startValue: i.startValue,
+      currentValue: i.currentValue,
+      unit: i.unit,
     })),
   }));
 
@@ -292,6 +297,10 @@ export default async function OkrDetailPage({
                                 name: initiative.name,
                                 dueDate: toDateInputValue(initiative.dueDate),
                                 responsibleUserId: initiative.responsibleUserId,
+                                measureType: initiative.measureType,
+                                targetValue: initiative.targetValue,
+                                startValue: initiative.startValue,
+                                unit: initiative.unit,
                               }}
                               members={business.members}
                             />

@@ -388,6 +388,14 @@ model KeyResult {
   responsibleUser   User         @relation(fields: [responsibleUserId], references: [id], onDelete: Cascade)
   outcomePercent    Float?
   comments          String?
+  // Structured measurement, same shape as Initiative below — added now so
+  // the model is ready, but no UI reads/writes these yet (that lands with
+  // the MRAP build, which is where Key Results get updated monthly).
+  measureType  MeasureType @default(MANUAL)
+  targetValue  Float?
+  startValue   Float?
+  currentValue Float?
+  unit         String?
   initiatives       Initiative[]
   nextSteps         NextStep[]
   createdAt         DateTime     @default(now())
@@ -406,6 +414,17 @@ model Initiative {
   responsibleUser   User      @relation(fields: [responsibleUserId], references: [id], onDelete: Cascade)
   outcomePercent    Float?
   comments          String?
+  // Structured measurement: MANUAL keeps today's hand-typed outcomePercent
+  // behavior unchanged (the default). BINARY and NUMERIC compute
+  // outcomePercent from these instead — see lib/measure.ts. targetValue is
+  // required for NUMERIC (e.g. 100 "tons"); startValue is an optional
+  // baseline so a descending target (reduce X from 10 to 5) computes
+  // correctly, not just an ascending one.
+  measureType  MeasureType @default(MANUAL)
+  targetValue  Float?
+  startValue   Float?
+  currentValue Float?
+  unit         String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -452,6 +471,15 @@ enum RagStatus {
   RED
   AMBER
   GREEN
+}
+
+// How a Key Result's or Initiative's outcomePercent is derived — see
+// lib/measure.ts. MANUAL is today's behavior (typed directly) and stays the
+// default so nothing existing changes unless explicitly reconfigured.
+enum MeasureType {
+  MANUAL
+  BINARY
+  NUMERIC
 }
 
 model NextStep {
@@ -533,6 +561,11 @@ model InitiativeCheckIn {
   initiativeId    String
   initiative      Initiative    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
   status          RagStatus     @default(AMBER)
+  // The raw value reported this week for BINARY/NUMERIC initiatives (0/1,
+  // or the actual current value) — kept separately from status/Initiative.
+  // currentValue so the week's own reported number is preserved in history
+  // even after later weeks move currentValue on. Null for MANUAL initiatives.
+  reportedValue   Float?
   blockers        String?
   priorities      String?
   createdAt       DateTime      @default(now())

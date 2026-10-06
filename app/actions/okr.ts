@@ -2,10 +2,30 @@
 
 import { revalidatePath, refresh } from "next/cache";
 import { redirect } from "next/navigation";
+import type { MeasureType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireMembership } from "@/lib/business";
 import { parseOptionalDate, parseOptionalFloat } from "@/lib/forms";
 import { canEditOutcome } from "@/lib/okr";
+import { computeOutcomePercent } from "@/lib/measure";
+
+const MEASURE_TYPES = new Set<string>(["MANUAL", "BINARY", "NUMERIC"]);
+
+// Reads the "how is this measured" fields shared by Initiative and KeyResult
+// creation/editing. Returns null if NUMERIC was chosen without a target —
+// that combination can't compute a percent, so it's rejected rather than
+// silently stored unusable.
+function parseMeasureFields(formData: FormData) {
+  const raw = String(formData.get("measureType") ?? "MANUAL");
+  const measureType = (MEASURE_TYPES.has(raw) ? raw : "MANUAL") as MeasureType;
+  const targetValue = parseOptionalFloat(formData.get("targetValue"));
+  const startValue = parseOptionalFloat(formData.get("startValue"));
+  const unit = String(formData.get("unit") ?? "").trim() || null;
+
+  if (measureType === "NUMERIC" && targetValue == null) return null;
+
+  return { measureType, targetValue, startValue, unit };
+}
 
 async function isBusinessMember(businessId: string, userId: string) {
   const member = await prisma.membership.findFirst({ where: { businessId, userId } });
@@ -310,8 +330,11 @@ export async function createInitiative(formData: FormData) {
   const responsibleUserId = String(formData.get("responsibleUserId") ?? "");
   if (!responsibleUserId || !(await isBusinessMember(membership.businessId, responsibleUserId))) return;
 
+  const measure = parseMeasureFields(formData);
+  if (!measure) return;
+
   await prisma.initiative.create({
-    data: { keyResultId, name, dueDate, responsibleUserId },
+    data: { keyResultId, name, dueDate, responsibleUserId, ...measure },
   });
 
   revalidatePath("/okrs");
@@ -337,9 +360,12 @@ export async function updateInitiative(formData: FormData) {
   const responsibleUserId = String(formData.get("responsibleUserId") ?? "");
   if (!responsibleUserId || !(await isBusinessMember(membership.businessId, responsibleUserId))) return;
 
+  const measure = parseMeasureFields(formData);
+  if (!measure) return;
+
   await prisma.initiative.update({
     where: { id: initiativeId },
-    data: { name, dueDate, responsibleUserId },
+    data: { name, dueDate, responsibleUserId, ...measure },
   });
 
   revalidatePath("/okrs");
@@ -371,12 +397,25 @@ export async function updateInitiativeOutcome(formData: FormData) {
   if (!initiative) return;
   if (!canEditOutcome(membership, initiative.keyResult.objective, initiative.responsibleUserId)) return;
 
-  const outcomePercent = clampPercent(parseOptionalFloat(formData.get("outcomePercent")));
   const comments = String(formData.get("comments") ?? "") || null;
+
+  const data =
+    initiative.measureType === "MANUAL"
+      ? { outcomePercent: clampPercent(parseOptionalFloat(formData.get("outcomePercent"))), comments }
+      : (() => {
+          const currentValue = parseOptionalFloat(formData.get("currentValue"));
+          const outcomePercent = computeOutcomePercent({
+            measureType: initiative.measureType,
+            startValue: initiative.startValue,
+            targetValue: initiative.targetValue,
+            currentValue,
+          });
+          return { currentValue, outcomePercent, comments };
+        })();
 
   await prisma.initiative.update({
     where: { id: initiativeId },
-    data: { outcomePercent, comments },
+    data,
   });
 
   revalidatePath("/okrs");

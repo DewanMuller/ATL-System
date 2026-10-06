@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Users, Smile, Target } from "lucide-react";
-import type { RagStatus } from "@prisma/client";
+import type { RagStatus, MeasureType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionMembership } from "@/lib/business";
 import { isBusinessEntitled } from "@/lib/entitlements";
@@ -10,6 +10,7 @@ import { StatCard } from "@/components/preview/StatCard";
 import { RagBar } from "@/components/preview/RagBar";
 import { ragHex, ragBadgeClasses, ragLabel } from "@/components/preview/colors";
 import { WELLBEING_MIN, WELLBEING_MAX, wellbeingLabel, wellbeingPillClass, wellbeingAsPercent } from "@/lib/wellbeing";
+import { formatMeasureValue } from "@/lib/measure";
 import { nameFor } from "@/lib/user";
 
 const TABS = [
@@ -53,10 +54,15 @@ type MyInitiativeRow = {
     id: string;
     name: string;
     dueDate: Date;
+    measureType: MeasureType;
+    targetValue: number | null;
+    startValue: number | null;
+    currentValue: number | null;
+    unit: string | null;
     keyResult: { id: string; metric: string; objective: { id: string; title: string } };
   };
-  thisWeekEntry: { status: RagStatus; blockers: string | null; priorities: string | null } | null;
-  priorEntry: { status: RagStatus; blockers: string | null; priorities: string | null } | null;
+  thisWeekEntry: { status: RagStatus; reportedValue: number | null; blockers: string | null; priorities: string | null } | null;
+  priorEntry: { status: RagStatus; reportedValue: number | null; blockers: string | null; priorities: string | null } | null;
   history: { status: RagStatus }[];
 };
 
@@ -99,9 +105,13 @@ type InitiativeCheckInSummary = {
   initiative: {
     id: string;
     name: string;
+    measureType: MeasureType;
+    targetValue: number | null;
+    unit: string | null;
     keyResult: { metric: string; objective: { title: string } };
   };
   status: RagStatus;
+  reportedValue: number | null;
   blockers: string | null;
   priorities: string | null;
 };
@@ -213,6 +223,16 @@ function CheckInCard({ c, canDelete }: { c: CheckIn; canDelete: boolean }) {
                 <span className="font-medium text-zinc-800 dark:text-zinc-200">
                   {ic.initiative.name}
                 </span>
+                {ic.initiative.measureType !== "MANUAL" && (
+                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    {formatMeasureValue({
+                      measureType: ic.initiative.measureType,
+                      currentValue: ic.reportedValue,
+                      targetValue: ic.initiative.targetValue,
+                      unit: ic.initiative.unit,
+                    })}
+                  </span>
+                )}
                 <span className="text-xs text-zinc-400">
                   {initiativeBreadcrumb(ic.initiative)}
                 </span>
@@ -266,7 +286,14 @@ export default async function WrapPage({
         initiativeCheckIns: {
           include: {
             initiative: {
-              select: { id: true, name: true, keyResult: { select: { metric: true, objective: { select: { title: true } } } } },
+              select: {
+                id: true,
+                name: true,
+                measureType: true,
+                targetValue: true,
+                unit: true,
+                keyResult: { select: { metric: true, objective: { select: { title: true } } } },
+              },
             },
           },
         },
@@ -284,9 +311,14 @@ export default async function WrapPage({
         id: true,
         name: true,
         dueDate: true,
+        measureType: true,
+        targetValue: true,
+        startValue: true,
+        currentValue: true,
+        unit: true,
         keyResult: { select: { id: true, metric: true, objective: { select: { id: true, title: true } } } },
         weeklyCheckIns: {
-          select: { status: true, blockers: true, priorities: true, weeklyCheckIn: { select: { weekOf: true } } },
+          select: { status: true, reportedValue: true, blockers: true, priorities: true, weeklyCheckIn: { select: { weekOf: true } } },
           orderBy: { weeklyCheckIn: { weekOf: "desc" } },
           take: 6,
         },
@@ -416,7 +448,7 @@ export default async function WrapPage({
                           </p>
                           {kr.rows.map(({ initiative, thisWeekEntry, priorEntry, history }) => (
                             <div
-                              key={`${initiative.id}-${thisWeekEntry?.status}-${thisWeekEntry?.blockers}-${thisWeekEntry?.priorities}`}
+                              key={`${initiative.id}-${thisWeekEntry?.status}-${thisWeekEntry?.reportedValue}-${thisWeekEntry?.blockers}-${thisWeekEntry?.priorities}`}
                               className="rounded-lg border border-black/10 p-4 dark:border-white/10"
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -431,20 +463,54 @@ export default async function WrapPage({
                               )}
 
                               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                <label className="flex flex-col gap-1 text-sm">
-                                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Status</span>
-                                  <select
-                                    name={`status-${initiative.id}`}
-                                    defaultValue={thisWeekEntry?.status ?? priorEntry?.status ?? "AMBER"}
-                                    className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
-                                  >
-                                    {RAG_OPTIONS.map((status) => (
-                                      <option key={status} value={status}>
-                                        {ragLabel(status)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
+                                {initiative.measureType === "MANUAL" ? (
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Status</span>
+                                    <select
+                                      name={`status-${initiative.id}`}
+                                      defaultValue={thisWeekEntry?.status ?? priorEntry?.status ?? "AMBER"}
+                                      className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
+                                    >
+                                      {RAG_OPTIONS.map((status) => (
+                                        <option key={status} value={status}>
+                                          {ragLabel(status)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                ) : initiative.measureType === "BINARY" ? (
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Done this week?</span>
+                                    <select
+                                      name={`value-${initiative.id}`}
+                                      defaultValue={
+                                        (thisWeekEntry?.reportedValue ?? initiative.currentValue ?? 0) >= 1 ? "1" : "0"
+                                      }
+                                      className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
+                                    >
+                                      <option value="0">Not done</option>
+                                      <option value="1">Done</option>
+                                    </select>
+                                  </label>
+                                ) : (
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                                      Current value {initiative.unit ? `(${initiative.unit})` : ""}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <input
+                                        name={`value-${initiative.id}`}
+                                        type="number"
+                                        step="any"
+                                        defaultValue={thisWeekEntry?.reportedValue ?? initiative.currentValue ?? initiative.startValue ?? undefined}
+                                        className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+                                      />
+                                      <span className="shrink-0 text-xs text-zinc-400">
+                                        / {initiative.targetValue ?? "—"}
+                                      </span>
+                                    </span>
+                                  </label>
+                                )}
                                 <label className="flex flex-col gap-1 text-sm sm:col-span-1">
                                   <span className="font-medium text-zinc-700 dark:text-zinc-300">Blockers</span>
                                   <input

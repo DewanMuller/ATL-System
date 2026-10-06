@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import type { MeasureType } from "@prisma/client";
 import { Avatar } from "./Avatar";
 import { FilterPills } from "./FilterPills";
 import { OutcomeEditor } from "./OutcomeEditor";
 import { ragBadgeClasses, ragHex } from "./colors";
 import { statusLabel, ragFor, ragLabel } from "./initiativeStatus";
 import { updateInitiativeOutcome } from "@/app/actions/okr";
+import { formatMeasureValue } from "@/lib/measure";
 
 export type FlatInitiative = {
   id: string;
@@ -21,6 +23,11 @@ export type FlatInitiative = {
   keyResultMetric: string;
   department: string;
   canEdit: boolean;
+  measureType: MeasureType;
+  targetValue: number | null;
+  startValue: number | null;
+  currentValue: number | null;
+  unit: string | null;
 };
 
 type Filter = "ALL" | "ASSIGNED_TO_ME" | "OVERDUE" | "DUE_THIS_MONTH" | "AT_RISK" | "OFF_TRACK";
@@ -171,6 +178,10 @@ export function AllInitiativesTable({
                             id={i.id}
                             outcomePercent={i.outcomePercent}
                             comments={i.comments}
+                            measureType={i.measureType}
+                            currentValue={i.currentValue}
+                            targetValue={i.targetValue}
+                            unit={i.unit}
                           />
                         </div>
                       )}
@@ -204,7 +215,11 @@ export function AllInitiativesTable({
                           />
                         </div>
                         <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {i.outcomePercent != null ? `${Math.round(i.outcomePercent)}%` : "0%"}
+                          {i.measureType === "MANUAL"
+                            ? i.outcomePercent != null
+                              ? `${Math.round(i.outcomePercent)}%`
+                              : "0%"
+                            : formatMeasureValue(i)}
                         </span>
                       </div>
                     </td>
