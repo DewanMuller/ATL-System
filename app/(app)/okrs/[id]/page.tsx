@@ -93,6 +93,11 @@ export default async function OkrDetailPage({
     comments: kr.comments,
     canEdit: canEditOutcome(membership, objective, kr.responsibleUserId),
     owner: { initials: initialsFor(kr.responsibleUser), name: nameFor(kr.responsibleUser) },
+    measureType: kr.measureType,
+    targetValue: kr.targetValue,
+    startValue: kr.startValue,
+    currentValue: kr.currentValue,
+    unit: kr.unit,
     initiatives: kr.initiatives.map((i) => ({
       id: i.id,
       name: i.name,
@@ -261,6 +266,10 @@ export default async function OkrDetailPage({
                           metric: kr.metric,
                           target: kr.target,
                           responsibleUserId: kr.responsibleUserId,
+                          measureType: kr.measureType,
+                          targetValue: kr.targetValue,
+                          startValue: kr.startValue,
+                          unit: kr.unit,
                         }}
                         members={business.members}
                       />

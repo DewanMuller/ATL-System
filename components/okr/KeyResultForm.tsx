@@ -1,5 +1,7 @@
+import type { MeasureType } from "@prisma/client";
 import { createKeyResult, updateKeyResult } from "@/app/actions/okr";
 import { TextField, SubmitButton } from "@/components/FormFields";
+import { MeasureFields } from "@/components/okr/MeasureFields";
 import type { MemberOption } from "@/lib/members";
 
 export function KeyResultForm({
@@ -12,7 +14,15 @@ export function KeyResultForm({
   mode: "create" | "edit";
   objectiveId?: string;
   keyResultId?: string;
-  defaultValues?: { metric: string; target: string; responsibleUserId: string };
+  defaultValues?: {
+    metric: string;
+    target: string;
+    responsibleUserId: string;
+    measureType?: MeasureType;
+    targetValue?: number | null;
+    startValue?: number | null;
+    unit?: string | null;
+  };
   members: MemberOption[];
 }) {
   const action = mode === "create" ? createKeyResult : updateKeyResult;
@@ -55,6 +65,14 @@ export function KeyResultForm({
           ))}
         </select>
       </label>
+      <MeasureFields
+        defaultValues={{
+          measureType: defaultValues?.measureType,
+          targetValue: defaultValues?.targetValue,
+          startValue: defaultValues?.startValue,
+          unit: defaultValues?.unit,
+        }}
+      />
       <SubmitButton>{mode === "create" ? "Add KR" : "Save"}</SubmitButton>
     </form>
   );

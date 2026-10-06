@@ -232,8 +232,11 @@ export async function createKeyResult(formData: FormData) {
   const responsibleUserId = String(formData.get("responsibleUserId") ?? "");
   if (!responsibleUserId || !(await isBusinessMember(membership.businessId, responsibleUserId))) return;
 
+  const measure = parseMeasureFields(formData);
+  if (!measure) return;
+
   await prisma.keyResult.create({
-    data: { objectiveId, metric, target, responsibleUserId },
+    data: { objectiveId, metric, target, responsibleUserId, ...measure },
   });
 
   revalidatePath("/okrs");
@@ -258,9 +261,12 @@ export async function updateKeyResult(formData: FormData) {
   const responsibleUserId = String(formData.get("responsibleUserId") ?? "");
   if (!responsibleUserId || !(await isBusinessMember(membership.businessId, responsibleUserId))) return;
 
+  const measure = parseMeasureFields(formData);
+  if (!measure) return;
+
   await prisma.keyResult.update({
     where: { id: keyResultId },
-    data: { metric, target, responsibleUserId },
+    data: { metric, target, responsibleUserId, ...measure },
   });
 
   revalidatePath("/okrs");
@@ -294,12 +300,25 @@ export async function updateKeyResultOutcome(formData: FormData) {
   if (!kr) return;
   if (!canEditOutcome(membership, kr.objective, kr.responsibleUserId)) return;
 
-  const outcomePercent = clampPercent(parseOptionalFloat(formData.get("outcomePercent")));
   const comments = String(formData.get("comments") ?? "") || null;
+
+  const data =
+    kr.measureType === "MANUAL"
+      ? { outcomePercent: clampPercent(parseOptionalFloat(formData.get("outcomePercent"))), comments }
+      : (() => {
+          const currentValue = parseOptionalFloat(formData.get("currentValue"));
+          const outcomePercent = computeOutcomePercent({
+            measureType: kr.measureType,
+            startValue: kr.startValue,
+            targetValue: kr.targetValue,
+            currentValue,
+          });
+          return { currentValue, outcomePercent, comments };
+        })();
 
   await prisma.keyResult.update({
     where: { id: keyResultId },
-    data: { outcomePercent, comments },
+    data,
   });
 
   revalidatePath("/okrs");

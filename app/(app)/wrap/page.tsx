@@ -45,8 +45,14 @@ function mostRecentMonday() {
   return toWeekKey(now);
 }
 
-function initiativeBreadcrumb(initiative: { name: string; keyResult: { metric: string; objective: { title: string } } }) {
-  return `${initiative.keyResult.objective.title} → ${initiative.keyResult.metric}`;
+// Objective codes and titles are always shown together (e.g. "C7 — Client
+// Advocacy & Brand Loyalty"), never the bare code or the bare title alone.
+function objectiveLabel(objective: { code: string | null; title: string }) {
+  return objective.code ? `${objective.code} — ${objective.title}` : objective.title;
+}
+
+function initiativeBreadcrumb(initiative: { name: string; keyResult: { metric: string; objective: { code: string | null; title: string } } }) {
+  return `${objectiveLabel(initiative.keyResult.objective)} → ${initiative.keyResult.metric}`;
 }
 
 type MyInitiativeRow = {
@@ -59,7 +65,7 @@ type MyInitiativeRow = {
     startValue: number | null;
     currentValue: number | null;
     unit: string | null;
-    keyResult: { id: string; metric: string; objective: { id: string; title: string } };
+    keyResult: { id: string; metric: string; objective: { id: string; code: string | null; title: string; dueDate: Date | null } };
   };
   thisWeekEntry: { status: RagStatus; reportedValue: number | null; blockers: string | null; priorities: string | null } | null;
   priorEntry: { status: RagStatus; reportedValue: number | null; blockers: string | null; priorities: string | null } | null;
@@ -70,11 +76,14 @@ type MyInitiativeRow = {
 // Result for display, so "your initiatives this week" reads as the same
 // OKR tree shown everywhere else in the app rather than a flat list.
 function groupByObjectiveAndKeyResult(rows: MyInitiativeRow[]) {
-  const objectives = new Map<string, { id: string; title: string; keyResults: Map<string, { id: string; metric: string; rows: MyInitiativeRow[] }> }>();
+  const objectives = new Map<
+    string,
+    { id: string; code: string | null; title: string; dueDate: Date | null; keyResults: Map<string, { id: string; metric: string; rows: MyInitiativeRow[] }> }
+  >();
   for (const row of rows) {
     const obj = row.initiative.keyResult.objective;
     const kr = row.initiative.keyResult;
-    if (!objectives.has(obj.id)) objectives.set(obj.id, { id: obj.id, title: obj.title, keyResults: new Map() });
+    if (!objectives.has(obj.id)) objectives.set(obj.id, { id: obj.id, code: obj.code, title: obj.title, dueDate: obj.dueDate, keyResults: new Map() });
     const objEntry = objectives.get(obj.id)!;
     if (!objEntry.keyResults.has(kr.id)) objEntry.keyResults.set(kr.id, { id: kr.id, metric: kr.metric, rows: [] });
     objEntry.keyResults.get(kr.id)!.rows.push(row);
@@ -108,7 +117,7 @@ type InitiativeCheckInSummary = {
     measureType: MeasureType;
     targetValue: number | null;
     unit: string | null;
-    keyResult: { metric: string; objective: { title: string } };
+    keyResult: { metric: string; objective: { code: string | null; title: string } };
   };
   status: RagStatus;
   reportedValue: number | null;
@@ -292,7 +301,7 @@ export default async function WrapPage({
                 measureType: true,
                 targetValue: true,
                 unit: true,
-                keyResult: { select: { metric: true, objective: { select: { title: true } } } },
+                keyResult: { select: { metric: true, objective: { select: { code: true, title: true } } } },
               },
             },
           },
@@ -316,7 +325,7 @@ export default async function WrapPage({
         startValue: true,
         currentValue: true,
         unit: true,
-        keyResult: { select: { id: true, metric: true, objective: { select: { id: true, title: true } } } },
+        keyResult: { select: { id: true, metric: true, objective: { select: { id: true, code: true, title: true, dueDate: true } } } },
         weeklyCheckIns: {
           select: { status: true, reportedValue: true, blockers: true, priorities: true, weeklyCheckIn: { select: { weekOf: true } } },
           orderBy: { weeklyCheckIn: { weekOf: "desc" } },
@@ -438,9 +447,16 @@ export default async function WrapPage({
                   </h2>
                   {myInitiativesByObjective.map((objective) => (
                     <div key={objective.id} className="flex flex-col gap-3">
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                        {objective.title}
-                      </p>
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                          {objectiveLabel(objective)}
+                        </p>
+                        {objective.dueDate && (
+                          <span className="text-xs text-zinc-400">
+                            Due {formatDate(objective.dueDate)}
+                          </span>
+                        )}
+                      </div>
                       {objective.keyResults.map((kr) => (
                         <div key={kr.id} className="flex flex-col gap-2 border-l-2 border-black/10 pl-4 dark:border-white/10">
                           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -452,7 +468,10 @@ export default async function WrapPage({
                               className="rounded-lg border border-black/10 p-4 dark:border-white/10"
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="font-medium text-zinc-800 dark:text-zinc-200">{initiative.name}</p>
+                                <div>
+                                  <p className="font-medium text-zinc-800 dark:text-zinc-200">{initiative.name}</p>
+                                  <p className="text-xs text-zinc-400">Due {formatDate(initiative.dueDate)}</p>
+                                </div>
                                 <RagTrend history={history} />
                               </div>
 
