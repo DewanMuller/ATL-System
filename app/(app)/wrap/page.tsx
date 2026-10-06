@@ -18,8 +18,6 @@ const TABS = [
   { key: "history", label: "History" },
 ] as const;
 
-const RAG_OPTIONS: RagStatus[] = ["GREEN", "AMBER", "RED"];
-
 function average(values: number[]) {
   if (values.length === 0) return null;
   return values.reduce((a, b) => a + b, 0) / values.length;
@@ -232,7 +230,7 @@ function CheckInCard({ c, canDelete }: { c: CheckIn; canDelete: boolean }) {
                 <span className="font-medium text-zinc-800 dark:text-zinc-200">
                   {ic.initiative.name}
                 </span>
-                {ic.initiative.measureType !== "MANUAL" && (
+                {ic.reportedValue != null && (
                   <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                     {formatMeasureValue({
                       measureType: ic.initiative.measureType,
@@ -484,18 +482,16 @@ export default async function WrapPage({
                               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 {initiative.measureType === "MANUAL" ? (
                                   <label className="flex flex-col gap-1 text-sm">
-                                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Status</span>
-                                    <select
-                                      name={`status-${initiative.id}`}
-                                      defaultValue={thisWeekEntry?.status ?? priorEntry?.status ?? "AMBER"}
-                                      className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
-                                    >
-                                      {RAG_OPTIONS.map((status) => (
-                                        <option key={status} value={status}>
-                                          {ragLabel(status)}
-                                        </option>
-                                      ))}
-                                    </select>
+                                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Progress (%)</span>
+                                    <input
+                                      name={`value-${initiative.id}`}
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      step="any"
+                                      defaultValue={thisWeekEntry?.reportedValue ?? initiative.currentValue ?? undefined}
+                                      className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+                                    />
                                   </label>
                                 ) : initiative.measureType === "BINARY" ? (
                                   <label className="flex flex-col gap-1 text-sm">

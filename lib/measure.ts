@@ -1,8 +1,12 @@
 import type { MeasureType } from "@prisma/client";
 
 // How an Initiative's or Key Result's outcomePercent is derived from its
-// structured measurement fields. MANUAL has no computed value — the caller
-// keeps using the hand-typed outcomePercent exactly as before.
+// structured measurement fields. For MANUAL, the reported value *is* the
+// percent (clamped 0-100) — this only applies where the caller explicitly
+// feeds a reported currentValue through it (WRAP); the OKR planner's
+// OutcomeEditor still writes outcomePercent directly for MANUAL without
+// going through here, since there's nothing to compute from a single typed
+// percent.
 export function computeOutcomePercent({
   measureType,
   startValue,
@@ -14,7 +18,9 @@ export function computeOutcomePercent({
   targetValue: number | null;
   currentValue: number | null;
 }): number | null {
-  if (measureType === "MANUAL") return null;
+  if (measureType === "MANUAL") {
+    return currentValue == null ? null : Math.max(0, Math.min(100, currentValue));
+  }
 
   if (measureType === "BINARY") {
     if (currentValue == null) return null;
@@ -53,7 +59,8 @@ export function formatMeasureValue({
     const target = targetValue != null ? ` / ${formatNumber(targetValue)}${unitSuffix}` : unitSuffix;
     return `${current}${target}`;
   }
-  return "—";
+  // MANUAL
+  return currentValue != null ? `${formatNumber(currentValue)}%` : "—";
 }
 
 function formatNumber(n: number) {

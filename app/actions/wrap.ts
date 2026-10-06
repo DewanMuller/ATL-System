@@ -10,7 +10,6 @@ import { computeOutcomePercent } from "@/lib/measure";
 import { ragForPercent } from "@/components/preview/colors";
 
 const RAG_TO_PERCENT: Record<RagStatus, number> = { GREEN: 100, AMBER: 50, RED: 0 };
-const VALID_RAG = new Set<string>(["GREEN", "AMBER", "RED"]);
 
 type OwnedInitiative = {
   id: string;
@@ -19,19 +18,13 @@ type OwnedInitiative = {
   startValue: number | null;
 };
 
-// MANUAL initiatives keep today's hand-picked RAG. BINARY/NUMERIC ones
-// report an actual value instead — the RAG and the week's outcomePercent
-// are both derived from it (see lib/measure.ts), not chosen separately, so
-// "how's it going" always matches the real number.
+// Every measure type reports an actual value in WRAP — a percent for
+// MANUAL, 0/1 for BINARY, a real number for NUMERIC — and the RAG is always
+// derived from it (see lib/measure.ts), never chosen separately, so "how's
+// it going" can't drift from the real number.
 function readInitiativeFields(formData: FormData, initiative: OwnedInitiative) {
   const blockers = String(formData.get(`blockers-${initiative.id}`) ?? "") || null;
   const priorities = String(formData.get(`priorities-${initiative.id}`) ?? "") || null;
-
-  if (initiative.measureType === "MANUAL") {
-    const statusRaw = String(formData.get(`status-${initiative.id}`) ?? "AMBER");
-    const status: RagStatus = VALID_RAG.has(statusRaw) ? (statusRaw as RagStatus) : "AMBER";
-    return { id: initiative.id, status, reportedValue: null as number | null, measuredPercent: null as number | null, blockers, priorities };
-  }
 
   const reportedValue = parseOptionalFloat(formData.get(`value-${initiative.id}`));
   const measuredPercent = computeOutcomePercent({
@@ -49,10 +42,9 @@ function readInitiativeFields(formData: FormData, initiative: OwnedInitiative) {
 // (see the @@unique([userId, weekOf]) constraint) rather than creating a
 // duplicate, since this is meant to be correctable, not append-only.
 //
-// goalCompletionPct is no longer typed by hand: for MANUAL initiatives it's
-// the RAG bucketed to a percent (GREEN=100/AMBER=50/RED=0) same as before;
-// for BINARY/NUMERIC it uses the real computed percent instead of the
-// bucketed approximation, since a real number is available.
+// goalCompletionPct is no longer typed by hand: it's the average of this
+// week's real measured percent per initiative (RAG_TO_PERCENT is only a
+// fallback for the rare case a value wasn't actually reported).
 export async function createWeeklyCheckIn(formData: FormData) {
   const membership = await requireMembership();
 
