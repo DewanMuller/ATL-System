@@ -49,6 +49,7 @@ model User {
   dueDateRequestsMade    DueDateChangeRequest[] @relation("DueDateRequestedBy")
   dueDateRequestsDecided DueDateChangeRequest[] @relation("DueDateDecidedBy")
   weeklyCheckIns         WeeklyCheckIn[]
+  monthlyCheckIns        MonthlyCheckIn[]
 }
 
 // The token emailed to the user is high-entropy random data (see
@@ -118,6 +119,7 @@ model Business {
   entitlements   Entitlement[]
   weeklyCheckIns   WeeklyCheckIn[]
   monthlyReviews   MonthlyReview[]
+  monthlyCheckIns  MonthlyCheckIn[]
   quarterlyReviews QuarterlyReview[]
   issues           Issue[]
   impersonationLogs ImpersonationLog[]
@@ -388,9 +390,9 @@ model KeyResult {
   responsibleUser   User         @relation(fields: [responsibleUserId], references: [id], onDelete: Cascade)
   outcomePercent    Float?
   comments          String?
-  // Structured measurement, same shape as Initiative below — added now so
-  // the model is ready, but no UI reads/writes these yet (that lands with
-  // the MRAP build, which is where Key Results get updated monthly).
+  // Structured measurement, same shape as Initiative — reported on monthly
+  // via KeyResultCheckIn (MRAP) the same way Initiative is reported on
+  // weekly via InitiativeCheckIn (WRAP).
   measureType  MeasureType @default(MANUAL)
   targetValue  Float?
   startValue   Float?
@@ -398,6 +400,7 @@ model KeyResult {
   unit         String?
   initiatives       Initiative[]
   nextSteps         NextStep[]
+  monthlyCheckIns   KeyResultCheckIn[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
@@ -574,6 +577,13 @@ model InitiativeCheckIn {
   @@index([initiativeId])
 }
 
+// The business+month anchor record. okrAveragePct is kept auto-maintained
+// (recomputed whenever someone submits a MonthlyCheckIn below) so QRAP, the
+// rolling performance report, and Next Steps' "MRAP · <month>" context tag
+// keep working — this is no longer filled in by a user-facing form of its
+// own; highlights/blockers/priorities are legacy and unused going forward
+// (individual submissions below replaced that single company-wide text
+// entry), kept only so existing reads don't need a migration.
 model MonthlyReview {
   id            String   @id @default(cuid())
   businessId    String
@@ -589,6 +599,52 @@ model MonthlyReview {
   nextSteps NextStep[]
 
   @@unique([businessId, month])
+}
+
+// The real per-person Level 1 MRAP submission: one per person per month,
+// tied to a real User like WeeklyCheckIn is — not a free-text name. Mirrors
+// WeeklyCheckIn's shape (wellbeing + overall notes) plus the MRAP-specific
+// fields the real BGC template has that WRAP doesn't: help needed and a
+// DIBR follow-up on previously escalated issues.
+model MonthlyCheckIn {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month          String
+  wellbeingScore Int
+  highlights     String?
+  blockers       String?
+  helpNeeded     String?
+  dibrFollowUp   String?
+  priorities     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  keyResultCheckIns KeyResultCheckIn[]
+
+  @@unique([userId, month])
+  @@index([businessId, month])
+}
+
+// One row per (key result, month) — the per-KR R/A/G + notes part of the
+// Level 1 template, same relationship InitiativeCheckIn has to WeeklyCheckIn
+// and reusing the same measureType-driven status derivation (lib/measure.ts)
+// so Key Results and Initiatives are reported on identically.
+model KeyResultCheckIn {
+  id               String         @id @default(cuid())
+  monthlyCheckInId String
+  monthlyCheckIn   MonthlyCheckIn @relation(fields: [monthlyCheckInId], references: [id], onDelete: Cascade)
+  keyResultId      String
+  keyResult        KeyResult      @relation(fields: [keyResultId], references: [id], onDelete: Cascade)
+  status           RagStatus      @default(AMBER)
+  reportedValue    Float?
+  notes            String?
+  createdAt        DateTime       @default(now())
+
+  @@unique([monthlyCheckInId, keyResultId])
+  @@index([keyResultId])
 }
 
 model QuarterlyReview {
