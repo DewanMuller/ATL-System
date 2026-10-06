@@ -48,6 +48,34 @@ function initiativeBreadcrumb(initiative: { name: string; keyResult: { metric: s
   return `${initiative.keyResult.objective.title} → ${initiative.keyResult.metric}`;
 }
 
+type MyInitiativeRow = {
+  initiative: {
+    id: string;
+    name: string;
+    dueDate: Date;
+    keyResult: { id: string; metric: string; objective: { id: string; title: string } };
+  };
+  thisWeekEntry: { status: RagStatus; blockers: string | null; priorities: string | null } | null;
+  priorEntry: { status: RagStatus; blockers: string | null; priorities: string | null } | null;
+  history: { status: RagStatus }[];
+};
+
+// Groups the submitter's own initiatives under their Objective and Key
+// Result for display, so "your initiatives this week" reads as the same
+// OKR tree shown everywhere else in the app rather than a flat list.
+function groupByObjectiveAndKeyResult(rows: MyInitiativeRow[]) {
+  const objectives = new Map<string, { id: string; title: string; keyResults: Map<string, { id: string; metric: string; rows: MyInitiativeRow[] }> }>();
+  for (const row of rows) {
+    const obj = row.initiative.keyResult.objective;
+    const kr = row.initiative.keyResult;
+    if (!objectives.has(obj.id)) objectives.set(obj.id, { id: obj.id, title: obj.title, keyResults: new Map() });
+    const objEntry = objectives.get(obj.id)!;
+    if (!objEntry.keyResults.has(kr.id)) objEntry.keyResults.set(kr.id, { id: kr.id, metric: kr.metric, rows: [] });
+    objEntry.keyResults.get(kr.id)!.rows.push(row);
+  }
+  return [...objectives.values()].map((o) => ({ ...o, keyResults: [...o.keyResults.values()] }));
+}
+
 function RagTrend({ history }: { history: { status: RagStatus }[] }) {
   if (history.length === 0) {
     return <span className="text-xs text-zinc-400">No history yet</span>;
@@ -256,7 +284,7 @@ export default async function WrapPage({
         id: true,
         name: true,
         dueDate: true,
-        keyResult: { select: { metric: true, objective: { select: { title: true } } } },
+        keyResult: { select: { id: true, metric: true, objective: { select: { id: true, title: true } } } },
         weeklyCheckIns: {
           select: { status: true, blockers: true, priorities: true, weeklyCheckIn: { select: { weekOf: true } } },
           orderBy: { weeklyCheckIn: { weekOf: "desc" } },
@@ -283,6 +311,8 @@ export default async function WrapPage({
     const priorEntry = initiative.weeklyCheckIns.find((h) => toWeekKey(h.weeklyCheckIn.weekOf) !== currentWeek) ?? null;
     return { initiative, thisWeekEntry, priorEntry, history: initiative.weeklyCheckIns };
   });
+
+  const myInitiativesByObjective = groupByObjectiveAndKeyResult(myInitiativeRows);
 
   return (
     <div className="flex flex-col gap-6">
@@ -369,64 +399,75 @@ export default async function WrapPage({
                 <Field label="Anything else for next week (optional)" name="priorities" defaultValue={myCheckInThisWeek?.priorities ?? undefined} full />
               </div>
 
-              {myInitiativeRows.length > 0 && (
-                <div className="flex flex-col gap-3">
+              {myInitiativesByObjective.length > 0 && (
+                <div className="flex flex-col gap-5">
                   <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                     Your initiatives this week
                   </h2>
-                  {myInitiativeRows.map(({ initiative, thisWeekEntry, priorEntry, history }) => (
-                    <div
-                      key={`${initiative.id}-${thisWeekEntry?.status}-${thisWeekEntry?.blockers}-${thisWeekEntry?.priorities}`}
-                      className="rounded-lg border border-black/10 p-4 dark:border-white/10"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="font-medium text-zinc-800 dark:text-zinc-200">{initiative.name}</p>
-                          <p className="text-xs text-zinc-400">{initiativeBreadcrumb(initiative)}</p>
+                  {myInitiativesByObjective.map((objective) => (
+                    <div key={objective.id} className="flex flex-col gap-3">
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                        {objective.title}
+                      </p>
+                      {objective.keyResults.map((kr) => (
+                        <div key={kr.id} className="flex flex-col gap-2 border-l-2 border-black/10 pl-4 dark:border-white/10">
+                          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                            {kr.metric}
+                          </p>
+                          {kr.rows.map(({ initiative, thisWeekEntry, priorEntry, history }) => (
+                            <div
+                              key={`${initiative.id}-${thisWeekEntry?.status}-${thisWeekEntry?.blockers}-${thisWeekEntry?.priorities}`}
+                              className="rounded-lg border border-black/10 p-4 dark:border-white/10"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="font-medium text-zinc-800 dark:text-zinc-200">{initiative.name}</p>
+                                <RagTrend history={history} />
+                              </div>
+
+                              {priorEntry?.priorities && (
+                                <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
+                                  Last week you said you&apos;d focus on: <span className="font-medium">{priorEntry.priorities}</span>
+                                </p>
+                              )}
+
+                              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <label className="flex flex-col gap-1 text-sm">
+                                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Status</span>
+                                  <select
+                                    name={`status-${initiative.id}`}
+                                    defaultValue={thisWeekEntry?.status ?? priorEntry?.status ?? "AMBER"}
+                                    className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
+                                  >
+                                    {RAG_OPTIONS.map((status) => (
+                                      <option key={status} value={status}>
+                                        {ragLabel(status)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="flex flex-col gap-1 text-sm sm:col-span-1">
+                                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Blockers</span>
+                                  <input
+                                    name={`blockers-${initiative.id}`}
+                                    type="text"
+                                    defaultValue={thisWeekEntry?.blockers ?? undefined}
+                                    className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+                                  />
+                                </label>
+                                <label className="flex flex-col gap-1 text-sm sm:col-span-1">
+                                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Focus for next week</span>
+                                  <input
+                                    name={`priorities-${initiative.id}`}
+                                    type="text"
+                                    defaultValue={thisWeekEntry?.priorities ?? undefined}
+                                    className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <RagTrend history={history} />
-                      </div>
-
-                      {priorEntry?.priorities && (
-                        <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
-                          Last week you said you&apos;d focus on: <span className="font-medium">{priorEntry.priorities}</span>
-                        </p>
-                      )}
-
-                      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <label className="flex flex-col gap-1 text-sm">
-                          <span className="font-medium text-zinc-700 dark:text-zinc-300">Status</span>
-                          <select
-                            name={`status-${initiative.id}`}
-                            defaultValue={thisWeekEntry?.status ?? priorEntry?.status ?? "AMBER"}
-                            className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-900"
-                          >
-                            {RAG_OPTIONS.map((status) => (
-                              <option key={status} value={status}>
-                                {ragLabel(status)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="flex flex-col gap-1 text-sm sm:col-span-1">
-                          <span className="font-medium text-zinc-700 dark:text-zinc-300">Blockers</span>
-                          <input
-                            name={`blockers-${initiative.id}`}
-                            type="text"
-                            defaultValue={thisWeekEntry?.blockers ?? undefined}
-                            className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1 text-sm sm:col-span-1">
-                          <span className="font-medium text-zinc-700 dark:text-zinc-300">Focus for next week</span>
-                          <input
-                            name={`priorities-${initiative.id}`}
-                            type="text"
-                            defaultValue={thisWeekEntry?.priorities ?? undefined}
-                            className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
-                          />
-                        </label>
-                      </div>
+                      ))}
                     </div>
                   ))}
                 </div>
